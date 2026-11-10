@@ -145,7 +145,8 @@ class Uavsar:
         ir = np.clip(np.round(rg).astype(int), 0, a.shape[1] - 1)
         lat, lon = a[ia][:, ir, 0], a[ia][:, ir, 1]
         x, y = pyproj.Transformer.from_crs(4326, 32610, always_xy=True).transform(lon, lat)
-        self.keys = zone_keys(np.asarray(x), np.asarray(y), zone_m).ravel()
+        self.x, self.y = np.asarray(x).ravel(), np.asarray(y).ravel()   # cell centres (m)
+        self.keys = zone_keys(self.x, self.y, zone_m)
         self.shape, self._cache = (ni, nj), {}
 
     def lags(self, lo, hi):
