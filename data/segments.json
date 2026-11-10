@@ -1,0 +1,22 @@
+{
+ "crs": "EPSG:32610 (UTM 10N)",
+ "note": "bbox = xmin ymin xmax ymax of the Sentinel-1 crop on each UAVSAR segment footprint",
+ "segments": {
+  "1": {
+   "bbox": [
+    601783,
+    4202453,
+    648570,
+    4245446
+   ]
+  },
+  "2": {
+   "bbox": [
+    567300,
+    4177100,
+    616300,
+    4222200
+   ]
+  }
+ }
+}

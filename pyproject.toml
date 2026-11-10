@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "torch>=2.15.0",   # closure_glrt.backend (copied from HDR) imports torch; complex64 on MPS needs 2.15
+    "zarr>=3",         # stores
 ]
 
 [project.optional-dependencies]

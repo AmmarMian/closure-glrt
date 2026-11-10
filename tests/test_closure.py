@@ -81,3 +81,21 @@ def test_lag_covariance_and_triplets(backend_name, dtype):
     assert np.allclose(phi_ref[..., 0], closure_phase(G, 0, 1, 2))
     assert np.allclose(kappa_ref[..., 1], dezan_concentration(a[..., 1, 2], a[..., 2, 3],
                                                               a[..., 1, 3], 6))
+
+
+def test_lag_covariance_matches_store_convention():
+    """Bitwise equal to the formula that built the paper's stores (complex64 products, complex128 sums)."""
+    from closure_glrt.io.uavsar import strip_statistics
+
+    rng = np.random.default_rng(9)
+    T, R, W, (r, c), K = 6, 30, 40, (15, 5), 2
+    X = (rng.standard_normal((T, R, W)) + 1j * rng.standard_normal((T, R, W))).astype(np.complex64)
+    stack = np.moveaxis(X, 0, -1)
+    Xr = stack.reshape(R // r, r, W // c, c, T)
+    legacy = np.full((R // r, W // c, T, K + 1), np.nan + 0j, dtype=np.complex128)
+    for k in range(K + 1):
+        prod = Xr[..., : T - k] * np.conj(Xr[..., k:])
+        legacy[:, :, : T - k, k] = prod.sum(axis=(1, 3), dtype=np.complex128) / (r * c)
+    lags, _, _ = strip_statistics(X, (r, c), K, n_threads=4)
+    assert lags.dtype == np.complex64
+    assert np.array_equal(lags, legacy.astype(np.complex64), equal_nan=True)

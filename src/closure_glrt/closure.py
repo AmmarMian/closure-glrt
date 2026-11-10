@@ -91,12 +91,16 @@ def block_sample_covariance(stack: Array, window: tuple[int, int],
 
 
 def block_lag_covariance(stack: Array, window: tuple[int, int], max_lag: int = 2,
-                         backend_name: Union[str, Backend] = "numpy") -> Array:
+                         backend_name: Union[str, Backend] = "numpy", sum_dtype=None) -> Array:
     r"""Entries $[\hat\Sigma_\ell]_{t,t+k}$, $k\le$ ``max_lag``, of every cell of a stack ``(H, W, T)``.
 
     Returns ``(H//r, W//c, T, max_lag+1)`` in the dtype of ``stack``; ``nan`` where
     $t+k\ge T$. Enough for every triplet of dates at most ``max_lag`` apart, at a memory cost
     $T(k_{\max}+1)$ instead of $T^2$.
+
+    ``sum_dtype`` (a dtype of the backend, e.g. ``np.complex128``) accumulates the products in a
+    wider type; the output then has that dtype. The stores of the paper were built from complex64
+    SLCs with products in complex64 and sums in complex128 (``sum_dtype=np.complex128``, numpy).
     """
     be = get_backend_module(backend_name)
     r, c = window
@@ -105,7 +109,8 @@ def block_lag_covariance(stack: Array, window: tuple[int, int], max_lag: int = 2
     X = stack[: Hm * r, : Wm * c].reshape(Hm, r, Wm, c, T)
     blocks = []
     for k in range(max_lag + 1):
-        prod = (X[..., : T - k] * X[..., k:].conj()).sum(-2).sum(1) / (r * c)  # (Hm, Wm, T-k)
+        prod = X[..., : T - k] * X[..., k:].conj()
+        prod = prod.sum((1, 3), dtype=sum_dtype) / (r * c)                  # (Hm, Wm, T-k)
         if k:
             # nan for t + k >= T; full_like on a slice keeps dtype and device
             pad = be.full_like(blocks[0][..., :k], float("nan"))

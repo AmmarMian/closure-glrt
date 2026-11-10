@@ -139,7 +139,9 @@ def strip_statistics(X: np.ndarray, window: tuple[int, int], max_lag: int, n_thr
 
     def lag_block(j):
         a, b = bounds[j], bounds[j + 1]
-        return block_lag_covariance(stack[:, a:b], window, max_lag).astype(np.complex64)
+        # products in complex64, sums in complex128 (as for the stores of the paper), stored complex64
+        return block_lag_covariance(stack[:, a:b], window, max_lag,
+                                    sum_dtype=np.complex128).astype(np.complex64)
 
     def amp_block(j):
         a, b = j * W // n_threads, (j + 1) * W // n_threads

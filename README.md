@@ -45,6 +45,30 @@ The GLRT is written to stay accurate in float32 (see `closure_glrt.glrt`).
 | `closure_glrt.io.uavsar`, `closure_glrt.io.opera` | UAVSAR SLC stack and OPERA CSLC-S1 readers |
 | `closure_glrt.provenance` | run directories with manifest (commit, inputs, outputs, hashes) |
 
+## Reproducing the results
+
+Every result of the paper is computed from intermediate *stores* built once from the raw data.
+Each script writes a run directory with a manifest (git commit, command, parameters, package
+versions, SHA-256 of every input and output) and refuses to run from a git tree with
+uncommitted changes (`--allow-dirty` overrides, and is recorded).
+
+| stage | command | output |
+|---|---|---|
+| 0. raw data | `just download uavsar s1` (and `s2`), `just download opera` | `$DATA_ROOT` (README layout) |
+| 1a. UAVSAR scan | `just store-uavsar 1`, `just store-uavsar 2` | `scan.zarr`: lags 0--2 of every 15 x 5 cell, VV |
+| 1b. speckle spectrum | `just store-spectrum` | `spectrum.npz`: correlation of the SLC pixels |
+| 1c. Sentinel-1 | `just store-cslc`, `just store-cslc-triplets 1` (and `2`) | burst scan, covariances of the matched triplets (`data/s1_triplets.csv`, `data/segments.json`) |
+| 2. experiments | being ported | figures and tables of the paper |
+
+Run directories go to `$RUNS_ROOT/runs/<run_id>` (manifest, log, small outputs) and the stores
+to `$RUNS_ROOT/large/runs/<run_id>`. The scan reads every SLC once (about 1.1 TB per segment;
+our runs took 92 and 192 minutes on a NAS with 12 threads for three polarisations).
+
+**Checking a rebuild.** `just verify <store> <key>` hashes the array *content* (independent of
+chunking, codec and zarr version) and compares it with the hashes of our stores in
+`data/stores.json`. The cell sums are accumulated in complex128 in a fixed order, so a rebuild
+from the same SLCs gives identical numbers.
+
 ## Data
 
 All data are public. `scripts/download.sh` downloads them from the URL lists in `data/urls/`
