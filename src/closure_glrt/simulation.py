@@ -23,6 +23,8 @@ with $N_{\mathrm{eff}}=(\sum_n\tau_n)^2/\sum_{n,m}\tau_n\tau_m|\rho_{nm}|^2$ (to
 import numpy as np
 
 __all__ = [
+    "kernel_from_spectrum",
+    "simulate_zones",
     "coherence_matrix",
     "moving_average_kernel",
     "correlation_area",
@@ -141,3 +143,60 @@ def effective_looks(tau, rho=None):
         return tau.sum(-1) ** 2 / (tau**2).sum(-1)
     R2 = np.abs(np.asarray(rho)) ** 2
     return tau.sum(-1) ** 2 / np.einsum("...n,nm,...m->...", tau, R2, tau)
+
+
+def kernel_from_spectrum(s, taps: int):
+    r"""Zero-phase complex kernel of $2\,$``taps``$+1$ samples with $|\mathrm{FFT}\,h|^2\propto s$, unit energy.
+
+    ``s`` is a 1-D power spectrum (``s_az`` or ``s_rg`` of the spectrum store); filtering white
+    noise along one axis with $h$ gives speckle with that spectrum along this axis.
+    """
+    h = np.fft.ifft(np.sqrt(np.clip(np.asarray(s, dtype=np.float64), 0, None)))
+    h = np.roll(h, taps)[: 2 * taps + 1]
+    return h / np.sqrt((np.abs(h) ** 2).sum())
+
+
+def _separable_speckle(rng, n, shape, h_az, h_rg):
+    """(n, 3, H, W) unit-variance speckle filtered along rows (az) by h_az and columns (rg) by h_rg."""
+    ka, kr = len(h_az), len(h_rg)
+    H, W = shape
+    g = (rng.standard_normal((n, 3, H + ka - 1, W + kr - 1))
+         + 1j * rng.standard_normal((n, 3, H + ka - 1, W + kr - 1))) / np.sqrt(2)
+    x = sum(h_az[i] * g[:, :, i:i + H] for i in range(ka))
+    return sum(h_rg[j] * x[:, :, :, j:j + W] for j in range(kr))
+
+
+def simulate_zones(R, window, zone, rng, h_az=None, h_rg=None, closure=0.0):
+    r"""Lagged cell covariances of whole zones of adjacent cells, as in the scan store.
+
+    Parameters
+    ----------
+    R : array (B, L, 3, 3), real coherence matrices of the $L=z_az_b$ cells of each zone
+        (e.g. built from the sample coherences of real cells with :func:`coherence_matrix`).
+    window : (r, c) pixels per cell; zone : (z_a, z_b) cells per zone.
+    rng : numpy Generator. h_az, h_rg : kernels of :func:`kernel_from_spectrum` (None: white).
+    closure : true closure (rad) put on entry (1, 2) of every cell.
+
+    One field per zone and date is filtered, then cut into the cells, so neighbouring cells
+    share correlated pixels as on the image; the looks of each cell are mixed over the dates by
+    the Cholesky factor of its matrix. Returns ``(B, L, 3, 3)`` complex128 with the scan layout
+    ``[..., t, k]`` $=[\hat\Sigma]_{t,t+k}$ (``nan`` where $t+k>2$), ready for
+    :func:`closure_glrt.closure.triplet_quantities`. Generated in numpy (HDR convention).
+    """
+    R = np.asarray(R, dtype=np.complex128).copy()
+    B, L = R.shape[:2]
+    r, c = window
+    za, zb = zone
+    h_az = np.ones(1) if h_az is None else np.asarray(h_az)
+    h_rg = np.ones(1) if h_rg is None else np.asarray(h_rg)
+    x = _separable_speckle(rng, B, (za * r, zb * c), h_az, h_rg)          # (B, 3, za r, zb c)
+    x = x.reshape(B, 3, za, r, zb, c).transpose(0, 2, 4, 1, 3, 5).reshape(B, L, 3, r * c)
+    R[..., 0, 1] *= np.exp(1j * closure)
+    R[..., 1, 0] *= np.exp(-1j * closure)
+    z = np.linalg.cholesky(R) @ x                                           # (B, L, 3, N)
+    S = z @ np.swapaxes(z.conj(), -1, -2) / (r * c)
+    out = np.full((B, L, 3, 3), np.nan + 0j)
+    for t in range(3):
+        out[..., t, 0] = S[..., t, t]
+    out[..., 0, 1], out[..., 1, 1], out[..., 0, 2] = S[..., 0, 1], S[..., 1, 2], S[..., 0, 2]
+    return out

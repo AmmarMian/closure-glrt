@@ -18,6 +18,8 @@ __all__ = [
     "WrappedNormal",
     "fit_wrapped_normal",
     "vm_cdf",
+    "leave_one_out",
+    "pit",
     "leave_one_out_pit",
     "ks_uniform",
 ]
@@ -64,46 +66,63 @@ def vm_cdf(d, kappa):
     return stats.vonmises.cdf(np.asarray(d), np.asarray(kappa), loc=0.0)
 
 
-def leave_one_out_pit(phi, weights, law="vm_c"):
-    r"""PIT of each cell of each zone against the closure of the other cells of its zone.
+def leave_one_out(phi, weights, batch: int = 20_000):
+    r"""Leave-one-out residual and scale of every cell of every zone.
 
-    For zone cells $\ell=1..L$ (last axis), $\hat\mu_{-\ell}=\arg\sum_{m\ne\ell}w_me^{j\hat\Phi_m}$,
-    $d_\ell=\operatorname{wrap}(\hat\Phi_\ell-\hat\mu_{-\ell})$ and $u_\ell=F(d_\ell)$ with
-
-    * ``"vm_c"``: $\mathcal{VM}(0,\hat c_{-\ell}w_\ell)$, $\hat c_{-\ell}$ the ML scale of the other
-      cells around their own direction (the model);
-    * ``"vm_1"``: $\mathcal{VM}(0,w_\ell)$ (scale one: weights taken as calibrated);
-    * ``"wn_c"``: wrapped normal of variance $1/(\hat c_{-\ell}w_\ell)$.
-
-    Under the model the $u_\ell$ are uniform on (0, 1). Returns ``u`` and ``d`` of the shape of
-    ``phi``. Zones are processed as a batch (no loop over zones).
+    For the cells $\ell=1..L$ of a zone (last axis), $\hat\mu_{-\ell}=\arg\sum_{m\ne\ell}w_me^{j\hat\Phi_m}$,
+    $d_\ell=\operatorname{wrap}(\hat\Phi_\ell-\hat\mu_{-\ell})$, and $\hat c_{-\ell}$ is the maximum
+    likelihood scale of the other cells around their own direction (root of
+    $\sum_{m\ne\ell}w_mA(cw_m)=|\sum_{m\ne\ell}w_me^{j\hat\Phi_m}|$). Zones ``(Z, L)`` are processed
+    in batches of ``batch`` zones (the scale needs a ``(batch, L, L)`` array). Host-side, numpy.
     """
     phi = np.asarray(phi, dtype=np.float64)
     w = np.broadcast_to(np.asarray(weights, dtype=np.float64), phi.shape)
-    z = w * np.exp(1j * phi)
-    rest = z.sum(-1, keepdims=True) - z
-    mu = np.angle(rest)
-    d = wrap(phi - mu)
-    if law == "vm_1":
-        return vm_cdf(d, w), d
-    # ML scale of the other cells around their own direction: sum_{m!=l} w_m cos(phi_m - mu_-l)
     L = phi.shape[-1]
-    X = np.real(rest * np.exp(-1j * mu))
-    w_rest = np.broadcast_to(w[..., None, :], phi.shape + (L,)).copy()
+    phi2, w2 = phi.reshape(-1, L), w.reshape(-1, L)
+    d = np.empty_like(phi2)
+    c = np.empty_like(phi2)
     idx = np.arange(L)
-    w_rest[..., idx, idx] = 0.0
-    c = scale_ml(X, w_rest)
-    kappa = c * w
+    for s in range(0, len(phi2), batch):
+        p, ww = phi2[s:s + batch], w2[s:s + batch]
+        z = ww * np.exp(1j * p)
+        rest = z.sum(-1, keepdims=True) - z
+        d[s:s + batch] = wrap(p - np.angle(rest))
+        w_rest = np.broadcast_to(ww[:, None, :], (len(p), L, L)).copy()
+        w_rest[:, idx, idx] = 0.0
+        c[s:s + batch] = scale_ml(np.abs(rest), w_rest)
+    return d.reshape(phi.shape), c.reshape(phi.shape)
+
+
+def pit(d, kappa, scale, law: str = "vm_c"):
+    r"""PIT $u=F(d)$ of residuals ``d`` under one law of the closure noise.
+
+    ``"vm_c"``: $\mathcal{VM}(0,\hat c\kappa)$ (the model); ``"vm_1"``: $\mathcal{VM}(0,\kappa)$ (scale one);
+    ``"wn_c"``: wrapped normal of variance $1/(\hat c\kappa)$.
+    """
+    d, kappa, scale = (np.asarray(x, dtype=np.float64) for x in (d, kappa, scale))
+    if law == "vm_1":
+        return vm_cdf(d, kappa)
     if law == "vm_c":
-        return vm_cdf(d, kappa), d
+        return vm_cdf(d, scale * kappa)
     if law == "wn_c":
-        sigma = 1.0 / np.sqrt(kappa)
-        n = 4
-        k = np.arange(-n, n + 1)
+        sigma = 1.0 / np.sqrt(scale * kappa)
+        k = np.arange(-4, 5)
         u = (stats.norm.cdf((d[..., None] + 2 * np.pi * k) / sigma[..., None])
              - stats.norm.cdf((-np.pi + 2 * np.pi * k) / sigma[..., None])).sum(-1)
-        return np.clip(u, 0.0, 1.0), d
+        return np.clip(u, 0.0, 1.0)
     raise ValueError(f"unknown law {law!r}")
+
+
+def leave_one_out_pit(phi, weights, law="vm_c"):
+    r"""PIT of each cell against the closure of the other cells of its zone (see :func:`leave_one_out`).
+
+    Under the model the $u_\ell$ are uniform on (0, 1), up to the small effect of estimating
+    $\hat\mu_{-\ell}$ and $\hat c_{-\ell}$ (compare real data with a simulated baseline). Returns
+    ``u`` and ``d`` of the shape of ``phi``.
+    """
+    d, c = leave_one_out(phi, weights)
+    w = np.broadcast_to(np.asarray(weights, dtype=np.float64), np.shape(d))
+    return pit(d, w, c, law), d
 
 
 def ks_uniform(u):

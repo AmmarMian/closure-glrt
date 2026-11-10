@@ -28,6 +28,8 @@ __all__ = [
     "block_sample_covariance",
     "block_lag_covariance",
     "triplet_quantities",
+    "aggregate_cells",
+    "tile_zones",
 ]
 
 
@@ -139,3 +141,29 @@ def triplet_quantities(lags: Array, n_looks: int,
     bad = ~(be.isfinite(phi) & be.isfinite(kappa) & (kappa > 0) & be.isfinite(gmin))
     nan = be.full_like(phi, float("nan"))
     return be.where(bad, nan, phi), be.where(bad, nan, kappa), gmin
+
+
+def aggregate_cells(lags: Array, factor: tuple[int, int],
+                    backend_name: Union[str, Backend] = "numpy") -> Array:
+    r"""Cells of ``factor = (a, b)`` base cells: average of their lagged covariances.
+
+    ``lags`` ``(I, J, ...)`` (e.g. a scan store slice) gives ``(I // a, J // b, ...)``; the
+    sample covariance of a cell made of $ab$ base cells of $N$ pixels is the average of theirs.
+    """
+    a, b = factor
+    I, J = lags.shape[0] // a, lags.shape[1] // b
+    x = lags[: I * a, : J * b].reshape(I, a, J, b, *lags.shape[2:])
+    return x.sum(3).sum(1) / (a * b)
+
+
+def tile_zones(x: Array, zone: tuple[int, int], backend_name: Union[str, Backend] = "numpy") -> Array:
+    r"""Cell grid ``(I, J, ...)`` -> zones ``(I // za, J // zb, za * zb, ...)`` (borders dropped).
+
+    Cells of a zone are in row-major order (rows = azimuth, columns = range).
+    """
+    be = get_backend_module(backend_name)
+    za, zb = zone
+    I, J = x.shape[0] // za, x.shape[1] // zb
+    y = x[: I * za, : J * zb].reshape(I, za, J, zb, *x.shape[2:])
+    y = be.swapaxes(y, 1, 2)
+    return y.reshape(I, J, za * zb, *x.shape[2:])
