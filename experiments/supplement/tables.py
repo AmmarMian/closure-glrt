@@ -13,7 +13,9 @@ commit), so that each number of Section V can be traced to the run that produced
 * ``series_<seg>.tex``: per triplet (cells of 15x5): dates, detected shares of the classes of the
   independent pairs (``gbar_indep``), share of the zones incoherent on the triplet
   (``gbar_own`` < 0.2) for both cell sizes, soil moisture and 7-day rain at the last date;
-* ``landcover.tex``: by crop, for the triplets of the land-cover runs.
+* ``landcover.tex``: by crop, for the triplets of the land-cover runs;
+* ``sentinel1.tex``: per matched Sentinel-1 triplet, on the common coherent zones of both sensors
+  (``experiments/sentinel1/cross_sensor.py``).
 
 Shares are given in percent at ``--pfa``; a class with fewer than ``--min-zones`` zones on a
 triplet is left blank in the per-triplet tables, as in Fig. 7.
@@ -195,14 +197,43 @@ def landcover_table(landcover, pfa):
     return longtable("llp{0.22\\linewidth}rrrrr", head, rows, cap, "tab:landcover")
 
 
+def sentinel1_table(xsensor):
+    rows = []
+    for seg in sorted(xsensor):
+        for r in read(Path(xsensor[seg]) / "summary.csv"):
+            if not r.get("zones"):
+                continue
+            f2 = lambda k: f"{float(r[k]):.2f}"  # noqa: E731
+            rows.append([seg, r["track"], r["t"], r["zones"], pct(r["det_uavsar"]),
+                         pct(r["det_s1"]), f"{float(r['h_uavsar_med_deg']):.1f}",
+                         f"{float(r['h_s1_med_deg']):.1f}", f2("rel_robust_uavsar"),
+                         f2("rel_robust_s1"), f2("r_max_robust"),
+                         f"{float(r['spearman_mu']):+.3f} [{float(r['spearman_lo']):+.3f}, "
+                         f"{float(r['spearman_hi']):+.3f}]",
+                         f"{pct(r['sign_agree_both'], 0)} ({r['n_both']})"])
+    cap = (r"Sentinel-1 and UAVSAR on the common coherent zones of 100~m of each matched triplet "
+           r"(VV, UAVSAR cells of $30\times10$ pixels, Sentinel-1 cells of 20~m): zones, detected "
+           r"shares (\%, $\Pfa=0.01$), median half-width of the $95\%$ confidence arc (deg), "
+           r"robust share of the spread of $\hat\meandir$ over the zones that exceeds the "
+           r"estimation error ($\varrho$, medians and MAD), rank correlation $r_{\max}$ expected "
+           r"if both sensors measured the same closures, observed rank correlation of the two "
+           r"$\hat\meandir$ with its spatial block bootstrap $95\%$ interval, and sign agreement "
+           r"(\%) on the zones detected by both (their number). "
+           + "; ".join(f"{seg}: {cite(xsensor[seg])}" for seg in sorted(xsensor)) + ".")
+    head = (r"Seg. & Track & $t$ & Zones & Det.~U & Det.~S1 & $h$~U & $h$~S1 & $\varrho$~U & "
+            r"$\varrho$~S1 & $r_{\max}$ & Rank corr. & Sign")
+    return longtable("lllrrrrrrrrlr", head, rows, cap, "tab:sentinel1")
+
+
 def main(args):
     root = Path(args.runs_root)
-    scan, sameday, weather, landcover = ({k: root / v for k, v in pairs(x).items()}
-                                         for x in (args.scan, args.sameday, args.weather,
-                                                   args.landcover))
+    scan, sameday, weather, landcover, xsensor = (
+        {k: root / v for k, v in pairs(x).items()}
+        for x in (args.scan, args.sameday, args.weather, args.landcover, args.xsensor))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    every = [*scan.values(), *sameday.values(), *weather.values(), *landcover.values()]
+    every = [*scan.values(), *sameday.values(), *weather.values(), *landcover.values(),
+             *xsensor.values()]
     (out / "runs.tex").write_text(runs_table(every))
     t1, t2 = sameday_tables(sameday, scan, args.pfa)
     (out / "sameday.tex").write_text(t1)
@@ -212,6 +243,7 @@ def main(args):
         (out / f"series_{seg}.tex").write_text(
             series_triplets(seg, scan[seg], weather[seg], args.pfa, args.min_zones))
     (out / "landcover.tex").write_text(landcover_table(landcover, args.pfa))
+    (out / "sentinel1.tex").write_text(sentinel1_table(xsensor))
     print(f"tables written to {out}")
 
 
@@ -219,7 +251,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--runs-root", required=True, help="Directory holding the run directories.")
-    for name in ("scan", "sameday", "weather", "landcover"):
+    for name in ("scan", "sameday", "weather", "landcover", "xsensor"):
         p.add_argument(f"--{name}", nargs="+", required=True, metavar="SEG=RUN_ID")
     p.add_argument("--pfa", type=float, default=0.01)
     p.add_argument("--min-zones", type=int, default=1000)
