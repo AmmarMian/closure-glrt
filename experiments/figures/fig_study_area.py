@@ -75,12 +75,13 @@ def db_image(ax, inten, extent, label):
             color=INK, bbox=dict(fc="white", ec="none", pad=1.2))
 
 
-def scale_bar(ax, extent, length=500.0):
-    x0 = extent[0] + 0.62 * (extent[1] - extent[0])
-    y0 = extent[3] - 0.06 * (extent[3] - extent[2])
+def scale_bar(ax, extent, length=500.0, label="500 m", fx=0.62, fy=0.06):
+    """Bar of ``length`` (data units) starting at ``fx`` of the width, ``fy`` below the top."""
+    x0 = extent[0] + fx * (extent[1] - extent[0])
+    y0 = extent[3] - fy * (extent[3] - extent[2])
     ax.plot([x0, x0 + length], [y0, y0], color="white", lw=2.2, solid_capstyle="butt")
     ax.plot([x0, x0 + length], [y0, y0], color=INK, lw=1.0, solid_capstyle="butt")
-    ax.text(x0 + length / 2, y0 - 0.025 * (extent[3] - extent[2]), f"{length:.0f} m",
+    ax.text(x0 + length / 2, y0 - 0.025 * (extent[3] - extent[2]), label,
             ha="center", va="top", fontsize=6, color=INK,
             bbox=dict(fc="white", ec="none", pad=0.8))
 
@@ -141,6 +142,7 @@ def main(args):
     ax.text(0.98, 0.92, "Sentinel-1 bursts " + ", ".join(tracks), transform=ax.transAxes,
             color=INK, fontsize=6, ha="right", va="top",
             bbox=dict(fc="white", ec=S1, lw=0.8, pad=1.5))
+    scale_bar(ax, ext_km, 5.0, "5 km", fx=0.82, fy=0.92)
     panel_label(ax, "(a)", bg="white")
 
     gap = 0.1
