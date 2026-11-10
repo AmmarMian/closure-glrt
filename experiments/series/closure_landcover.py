@@ -76,6 +76,13 @@ def sample(path, lon, lat, k=1):
     return out
 
 
+def parse_date(s):
+    """Acquisition date of a store: ISO (OPERA stores) or YYMMDD (UAVSAR stores)."""
+    s = str(s)
+    return (dt.datetime.strptime(s, "%y%m%d").date() if len(s) == 6 and s.isdigit()
+            else dt.date.fromisoformat(s))
+
+
 def circmean_deg(x):
     return float(np.degrees(np.angle(np.mean(np.exp(1j * x)))))
 
@@ -94,7 +101,7 @@ def main(args):
     cell = (a * base[0], b * base[1])
     g = zones[f"{cell[0]}x{cell[1]}"]
     triplets = list(zones.attrs["triplets"])
-    dates = [dt.date.fromisoformat(x["date"]) for x in store.attrs["acquisitions"]]
+    dates = [parse_date(x["date"]) for x in store.attrs["acquisitions"]]
     shape = g["mu"].shape[1:]
     lon, lat = zone_lonlat(args.llh, store.attrs["image_shape"], cell, tuple(zones.attrs["zone"]),
                            shape)
