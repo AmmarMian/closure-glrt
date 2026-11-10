@@ -15,7 +15,9 @@ commit), so that each number of Section V can be traced to the run that produced
   (``gbar_own`` < 0.2) for both cell sizes, soil moisture and 7-day rain at the last date;
 * ``landcover.tex``: by crop, for the triplets of the land-cover runs;
 * ``sentinel1.tex``: per matched Sentinel-1 triplet, on the common coherent zones of both sensors
-  (``experiments/sentinel1/cross_sensor.py``).
+  (``experiments/sentinel1/cross_sensor.py``);
+* ``sentinel1_classes.tex``: the same comparison on the zones whose coherence is at least 0.5,
+  0.6, 0.7 or 0.8 in both sensors (``experiments/sentinel1/coherence_classes.py``).
 
 Shares are given in percent at ``--pfa``; a class with fewer than ``--min-zones`` zones on a
 triplet is left blank in the per-triplet tables, as in Fig. 7.
@@ -230,6 +232,26 @@ def sentinel1_table(xsensor):
     return longtable("lllrrrrrrrrlr", head, rows, cap, "tab:sentinel1")
 
 
+def sentinel1_classes_table(run):
+    rows = []
+    for r in read(Path(run) / "classes.csv"):
+        stats = bool(r.get("det_s1"))
+        rho = (f"{float(r['spearman_mu']):+.3f} [{float(r['spearman_lo']):+.3f}, "
+               f"{float(r['spearman_hi']):+.3f}]") if stats else ""
+        f1 = lambda k: f"{float(r[k]):.1f}" if stats else ""  # noqa: E731
+        rows.append([r["segment"], r["track"], r["t"], f"{float(r['coh_min']):.1f}", r["zones"],
+                     pct(r["det_uavsar"]) if stats else "", pct(r["det_s1"]) if stats else "",
+                     f1("h_uavsar_med_deg"), f1("h_s1_med_deg"), rho])
+    cap = (r"Sentinel-1 and UAVSAR on the zones of Table~\ref{tab:sentinel1} whose selection "
+           r"coherence is at least $q$ in both sensors: zones, detected shares (\%, $\Pfa=0.01$), "
+           r"median half-width of the $95\%$ confidence arc (deg) and rank correlation of the two "
+           r"$\hat\meandir$ with its spatial block bootstrap $95\%$ interval (blank below 50 "
+           r"zones). " + cite(run) + ".")
+    head = (r"Seg. & Track & $t$ & $q$ & Zones & Det.~U & Det.~S1 & $h$~U & $h$~S1 & "
+            r"Rank corr.")
+    return longtable("llllrrrrrl", head, rows, cap, "tab:sentinel1-classes")
+
+
 def main(args):
     root = Path(args.runs_root)
     scan, sameday, weather, landcover, xsensor = (
@@ -238,7 +260,7 @@ def main(args):
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     every = [*scan.values(), *sameday.values(), *weather.values(), *landcover.values(),
-             *xsensor.values()]
+             *xsensor.values(), root / args.xclasses]
     (out / "runs.tex").write_text(runs_table(every))
     t1, t2 = sameday_tables(sameday, scan, args.pfa)
     (out / "sameday.tex").write_text(t1)
@@ -249,6 +271,7 @@ def main(args):
             series_triplets(seg, scan[seg], weather[seg], args.pfa, args.min_zones))
     (out / "landcover.tex").write_text(landcover_table(landcover, args.pfa))
     (out / "sentinel1.tex").write_text(sentinel1_table(xsensor))
+    (out / "sentinel1_classes.tex").write_text(sentinel1_classes_table(root / args.xclasses))
     print(f"tables written to {out}")
 
 
@@ -258,6 +281,8 @@ if __name__ == "__main__":
     p.add_argument("--runs-root", required=True, help="Directory holding the run directories.")
     for name in ("scan", "sameday", "weather", "landcover", "xsensor"):
         p.add_argument(f"--{name}", nargs="+", required=True, metavar="SEG=RUN_ID")
+    p.add_argument("--xclasses", required=True, metavar="RUN_ID",
+                   help="Run of experiments/sentinel1/coherence_classes.py.")
     p.add_argument("--pfa", type=float, default=0.01)
     p.add_argument("--min-zones", type=int, default=1000)
     p.add_argument("--out", required=True)
