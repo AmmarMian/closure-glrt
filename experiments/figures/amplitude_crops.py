@@ -9,9 +9,10 @@ averaged over two pixels in x (10 x 10 m, 2 looks), mosaicked and resampled to t
 (nearest). Output: an ``.npz`` with the two intensities, the grid and the dates.
 
 Example (on the machine that holds the SLCs):
-    python experiments/figures/amplitude_crops.py --center 618836 4217325 --size 2500 \
-        --uavsar-slc $DATA_ROOT/uavsar/SDelta_23518/SDelta_23518_17060_012_170609_L090VV_02_BC_s1_1x1.slc \
-        --llh $DATA_ROOT/uavsar/SDelta_23518/SDelta_23518_02_BC_s1_2x8.llh \
+    U=$DATA_ROOT/uavsar/SDelta_23518
+    python experiments/figures/amplitude_crops.py --center 617700 4218500 --size 3000 \
+        --uavsar-slc $U/SDelta_23518_17060_012_170609_L090VV_02_BC_s1_1x1.slc \
+        --llh $U/SDelta_23518_02_BC_s1_2x8.llh \
         --cslc $DATA_ROOT/sentinel1/OPERA_CSLC/T042/*20170606T*_VV_v1.1.h5 --out crops.npz
 """
 
@@ -121,8 +122,9 @@ def main(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--center", nargs=2, type=float, required=True, help="UTM 10N easting northing (m)")
-    p.add_argument("--size", type=float, default=2500.0, help="side of the square box (m)")
+    p.add_argument("--center", nargs=2, type=float, required=True,
+                   help="UTM 10N easting northing (m)")
+    p.add_argument("--size", type=float, default=3000.0, help="side of the square box (m)")
     p.add_argument("--res", type=float, default=5.0)
     p.add_argument("--uavsar-slc", required=True)
     p.add_argument("--llh", required=True)

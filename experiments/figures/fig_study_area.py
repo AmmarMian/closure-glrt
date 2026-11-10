@@ -21,7 +21,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import zarr
 from matplotlib.patches import Rectangle
-
 from style import INK, PAGE, S1, UAVSAR, panel_label, style
 
 
@@ -59,7 +58,7 @@ def landsat_scene(landsat_dir, scenes, mp, res=30.0):
 
 
 def stretch(x, gamma=0.75):
-    """Common 1--99 % stretch of the three bands (keeps colour balance), gamma, white where empty."""
+    """Common 1--99 % stretch of the bands (keeps colour balance), gamma, white where empty."""
     v = x[np.isfinite(x)]
     lo, hi = np.percentile(v, [1, 99])
     y = np.clip((x - lo) / (hi - lo), 0, 1) ** gamma
@@ -166,7 +165,8 @@ if __name__ == "__main__":
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--context", required=True)
     p.add_argument("--s1-triplets", required=True)
-    p.add_argument("--landsat-dir", required=True, help="Raw Landsat C2 L2 tiles (<id>_<band>.tif).")
+    p.add_argument("--landsat-dir", required=True,
+                   help="Raw Landsat C2 L2 tiles (<id>_<band>.tif).")
     p.add_argument("--scenes", nargs="+",
                    default=["LC08_L2SP_044034_20170614_02_T1", "LC08_L2SP_044033_20130721_02_T1"],
                    help="Landsat product ids, mosaicked in order (the first one has priority).")
