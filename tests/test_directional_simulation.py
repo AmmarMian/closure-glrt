@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
+from conftest import BACKEND_DTYPE_PARAMS
 
+from closure_glrt.backend import get_data_on_device, to_dtype, to_numpy
 from closure_glrt.closure import closure_phase, dezan_concentration, sample_coherence_matrix
 from closure_glrt.directional import WrappedNormal, ks_uniform, leave_one_out_pit, vm_cdf
 from closure_glrt.simulation import (
@@ -59,3 +61,22 @@ def test_correlated_looks_scale():
 def test_effective_looks_white():
     tau = np.ones((4, 10))
     assert np.allclose(effective_looks(tau), 10)
+
+
+@pytest.mark.parametrize("backend_name,dtype", BACKEND_DTYPE_PARAMS)
+def test_simulated_cells_on_backends(backend_name, dtype):
+    """Cells simulated in numpy, moved to a backend (complex64 on MPS): same closure law."""
+    rng = np.random.default_rng(3)
+    S = np.broadcast_to(coherence_matrix(0.8, 0.8, 0.8), (5000, 3, 3))
+    X, _ = simulate_cells(S, (8, 8), rng, kernel=moving_average_kernel(2), texture=1.0)
+    Xb = to_dtype(get_data_on_device(X, backend_name), np.dtype(dtype), backend_name)
+    G = sample_coherence_matrix(Xb, backend_name)
+    phi = closure_phase(G, backend_name=backend_name)
+    a = abs(G)
+    k0 = dezan_concentration(a[:, 0, 1], a[:, 1, 2], a[:, 0, 2], 64, backend_name=backend_name)
+    an = np.abs(sample_coherence_matrix(X))
+    k0_ref = dezan_concentration(an[:, 0, 1], an[:, 1, 2], an[:, 0, 2], 64)
+    phi_ref = closure_phase(sample_coherence_matrix(X))
+    tol = 1e-4 if dtype == "complex64" else 1e-10
+    assert np.allclose(to_numpy(phi), phi_ref, atol=tol)
+    assert np.allclose(to_numpy(k0), k0_ref, rtol=10 * tol)

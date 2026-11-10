@@ -1,8 +1,11 @@
 import numpy as np
 import pytest
+from conftest import BACKEND_DTYPE_PARAMS
 from scipy.special import i0e
 
+from closure_glrt.backend import get_data_on_device, to_dtype, to_numpy
 from closure_glrt.glrt import (
+    ScaleFreeClosureGLRT,
     confidence_halfwidth,
     glrt,
     legendre,
@@ -108,12 +111,32 @@ def test_confidence_coverage():
     assert abs(cover.mean() - 0.95) < 0.015
 
 
-def test_torch_matches_numpy():
-    torch = pytest.importorskip("torch")
+@pytest.mark.parametrize("kbar", [2.0, 50.0, 2000.0])
+@pytest.mark.parametrize("backend_name,dtype", BACKEND_DTYPE_PARAMS)
+def test_backends_agree_with_numpy(backend_name, dtype, kbar):
+    """Statistic, scales and arc agree with numpy float64 on every backend, also in float32."""
+    real = "float32" if dtype == "complex64" else "float64"
     rng = np.random.default_rng(6)
-    phi, w = _zones(rng, 300, 25, 10, c=0.5, mu=0.05)
-    lam_np = glrt(phi, w)
-    lam_t = glrt(torch.from_numpy(phi), torch.from_numpy(w)).numpy()
-    assert np.allclose(lam_np, lam_t, rtol=1e-6, atol=1e-8)
-    h_t = confidence_halfwidth(torch.from_numpy(phi), torch.from_numpy(w)).numpy()
-    assert np.allclose(confidence_halfwidth(phi, w), h_t, rtol=1e-6, atol=1e-8)
+    phi, w = _zones(rng, 500, 25, kbar, c=0.5, mu=0.02)
+    ref = glrt(phi, w, details=True)
+    h_ref = confidence_halfwidth(phi, w)
+    P, Wt = (to_dtype(get_data_on_device(x, backend_name), np.dtype(real), backend_name)
+             for x in (phi, w))
+    out = glrt(P, Wt, backend_name, details=True)
+    assert str(out["lam"].dtype).endswith(real)
+    tol = 1e-6 if real == "float64" else 2e-3
+    lam = to_numpy(out["lam"])
+    assert np.allclose(lam, ref["lam"], rtol=tol, atol=10 * tol)
+    assert np.allclose(to_numpy(out["c1"]), ref["c1"], rtol=10 * tol)
+    agree = (pvalue(lam, 25) < 0.01) == (pvalue(ref["lam"], 25) < 0.01)
+    assert agree.mean() > 0.995
+    h = to_numpy(confidence_halfwidth(P, Wt, backend_name=backend_name))
+    assert np.allclose(h, h_ref, rtol=10 * tol, atol=tol)
+
+
+def test_detector_class():
+    rng = np.random.default_rng(7)
+    phi, w = _zones(rng, 10, 25, 20)
+    det = ScaleFreeClosureGLRT(25)
+    assert np.allclose(det.compute(phi, w), glrt(phi, w))
+    assert det.get_threshold(0.01) == pytest.approx(float(threshold(25, 0.01)))

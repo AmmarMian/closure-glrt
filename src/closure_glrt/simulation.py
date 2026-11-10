@@ -11,6 +11,10 @@ $$x_n=\sqrt{\tau_n}\,\boldsymbol L\,\boldsymbol s_n,\qquad \boldsymbol\Sigma=\bo
   clutter; $\tau\equiv1$ is Gaussian speckle);
 * $\boldsymbol\Sigma$: coherence matrix of the cell; its closure is the true closure.
 
+Data are generated in numpy (complex128), as in HDR: the caller moves them to a backend with
+:func:`closure_glrt.backend.get_data_on_device`, which gives complex64 on torch-mps; casting
+to complex64 elsewhere is done with :func:`closure_glrt.backend.to_dtype`.
+
 First-order predictions for the scale of the test (relative to the nominal $N=rc$):
 correlated looks $c=1/A$, $A=\frac1N\sum_{n,m}|\rho_{nm}|^2$; texture $c=N_{\mathrm{eff}}/N$
 with $N_{\mathrm{eff}}=(\sum_n\tau_n)^2/\sum_{n,m}\tau_n\tau_m|\rho_{nm}|^2$ (to be checked).
@@ -112,14 +116,18 @@ def simulate_cells(Sigma, window, rng, kernel=None, texture=None):
     s = s.reshape(batch + (r * c, 3))
     Lc = np.linalg.cholesky(Sigma)
     X = np.einsum("...ab,...nb->...na", Lc, s)
-    if texture is None:
-        tau = np.ones(batch + (r * c,))
-    elif callable(texture):
-        tau = np.asarray(texture(rng, batch + (r, c))).reshape(batch + (r * c,))
-    else:
-        nu = float(texture)
-        tau = rng.gamma(nu, 1.0 / nu, size=batch + (r * c,))
+    tau = _draw_texture(rng, texture, batch + (r, c)).reshape(batch + (r * c,))
     return X * np.sqrt(tau)[..., None], tau
+
+
+def _draw_texture(rng, texture, shape):
+    """Texture tau of ``shape``: ones, Gamma(nu, 1/nu) for a float nu, or ``texture(rng, shape)``."""
+    if texture is None:
+        return np.ones(shape)
+    if callable(texture):
+        return np.asarray(texture(rng, shape), dtype=np.float64)
+    nu = float(texture)
+    return rng.gamma(nu, 1.0 / nu, size=shape)
 
 
 def effective_looks(tau, rho=None):

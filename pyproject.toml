@@ -7,14 +7,16 @@ name = "closure-glrt"
 version = "0.1.0"
 description = "Scale-free GLRT for InSAR closure phases with heterogeneous per-cell precision."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
+    "torch>=2.15.0",   # closure_glrt.backend (copied from HDR) imports torch; complex64 on MPS needs 2.15
 ]
 
 [project.optional-dependencies]
-gpu = ["torch>=2.2"]   # vectorised GLRT on many zones (closure_glrt.glrt accepts torch tensors)
+cupy = ["cupy-cuda12x>=13"]
+jax = ["jax>=0.4", "jaxlib>=0.4"]
 io = ["h5py>=3.10"]    # OPERA CSLC reader
 
 [dependency-groups]
@@ -25,7 +27,7 @@ packages = ["src/closure_glrt"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

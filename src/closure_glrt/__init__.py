@@ -8,6 +8,7 @@ from closure_glrt.closure import (
     triplet_quantities,
 )
 from closure_glrt.glrt import (
+    ScaleFreeClosureGLRT,
     confidence_halfwidth,
     glrt,
     glrt_known_scale,
@@ -18,6 +19,7 @@ from closure_glrt.glrt import (
 )
 
 __all__ = [
+    "ScaleFreeClosureGLRT",
     "closure_phase",
     "confidence_halfwidth",
     "dezan_closure_variance",

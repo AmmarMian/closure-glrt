@@ -16,19 +16,31 @@ Status: library only. The experiments of the paper are being rebuilt one by one 
 ## Install
 
 ```sh
-uv sync                 # numpy + scipy
-uv sync --extra gpu     # + torch: closure_glrt.glrt runs on torch tensors (GPU)
+uv sync                 # numpy, scipy, torch (cpu, cuda, mps)
+uv sync --extra cupy    # + CuPy (CUDA)
+uv sync --extra jax     # + JAX
 uv sync --extra io      # + h5py: OPERA CSLC reader
-uv run pytest
+uv run pytest           # every test runs on every available backend
 ```
+
+## Backends
+
+`closure_glrt.backend` is copied from HDR (`hdrlib/core/backend.py`): an algorithm never
+imports a compute library, it receives `backend_name` (`"numpy"`, `"torch-cpu"`,
+`"torch-cuda"`, `"torch-mps"`, `"cupy"`, `"jax-cpu"`, ...) and calls the module it is handed.
+Data are generated in numpy and moved with `get_data_on_device` (complex128 becomes complex64
+on torch-mps); results leave through `to_numpy`. Precision follows the data: complex64 SLCs
+give complex64 coherences and float32 closures, precisions and statistics, on every backend.
+The GLRT is written to stay accurate in float32 (see `closure_glrt.glrt`).
 
 ## Package
 
 | module | content |
 |---|---|
 | `closure_glrt.closure` | sample coherences, closure, De Zan's variance and $\kappa_0$, cell covariances of a stack, closures of consecutive triplets |
-| `closure_glrt.glrt` | weighted resultant, ML scale, Legendre transform, exact GLRT, p-value and threshold, known-scale (nominal / plug-in ENL) test, exact confidence arc; numpy or torch |
-| `closure_glrt.directional` | von Mises and wrapped normal laws, leave-one-out PIT, KS distance |
+| `closure_glrt.backend`, `closure_glrt.detection` | backend layer and `Detector` base class (from HDR) |
+| `closure_glrt.glrt` | weighted resultant, ML scale, Legendre transform, exact GLRT, p-value and threshold, known-scale (nominal / plug-in ENL) test, exact confidence arc, `ScaleFreeClosureGLRT` detector |
+| `closure_glrt.directional` | von Mises and wrapped normal laws, leave-one-out PIT, KS distance (host-side analysis, numpy) |
 | `closure_glrt.simulation` | cells of three dates with a given coherence matrix, spatially correlated looks, compound-Gaussian texture; correlation area and effective looks |
 | `closure_glrt.io.uavsar`, `closure_glrt.io.opera` | UAVSAR SLC stack and OPERA CSLC-S1 readers |
 | `closure_glrt.provenance` | run directories with manifest (commit, inputs, outputs, hashes) |

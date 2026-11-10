@@ -6,7 +6,7 @@ $\hat\Phi_\ell\sim\mathcal{VM}(\mu,c\,w_\ell)$, with known weights $w_\ell>0$
 Test $\mathcal H_0:\mu=0$ against $\mathcal H_1:\mu\neq0$, $c$ free under both.
 
 With $\rho=\sum_\ell w_\ell e^{j\hat\Phi_\ell}=Re^{j\hat\mu}$, $C=\operatorname{Re}\rho$,
-$g(c)=\sum_\ell\log I_0(cw_\ell)$ and its Legendre transform
+$W=\sum_\ell w_\ell$, $g(c)=\sum_\ell\log I_0(cw_\ell)$ and its Legendre transform
 $g^*(X)=\sup_{c\ge0}[cX-g(c)]$, the GLRT statistic is
 
 $$\Lambda=2\bigl[g^*(R)-g^*(\max(C,0))\bigr].$$
@@ -15,14 +15,35 @@ It is unchanged when all weights are multiplied by one constant, so the nominal 
 looks in $\kappa_0$ drops out. Its threshold comes from $t^2\sim F(1,L-1)$ in the Gaussian
 limit, valid for every $c$: reject when $\Lambda>L\log(1+F^{-1}_{1,L-1}(1-P_{fa})/(L-1))$.
 
-Every function works on the last axis: closures and weights of shape ``(..., L)`` give one
-value per zone, shape ``(...)``. Cells with weight 0 do not contribute (padding). Inputs may
-be numpy arrays or torch tensors (same type out), which runs the root searches on a GPU.
-Padding cells must have weight 0 and a finite closure (e.g. 0).
+**Numerics.** Closures from complex64 data are float32, so the statistic is written to be
+accurate in single precision: deficits $D=W-X$ are computed without subtraction
+($W-R=\sum_\ell 2w_\ell\sin^2\frac{\hat\Phi_\ell-\hat\mu}{2}$,
+$W-C=\sum_\ell 2w_\ell\sin^2\frac{\hat\Phi_\ell}{2}$), $1-A(x)$, $A=I_1/I_0$, uses its
+asymptotic series at large $x$, and $g^*(X)=-\hat cD-\sum_\ell\log\tilde I_0(\hat cw_\ell)$
+with $\tilde I_0(x)=e^{-x}I_0(x)$ and $\sum_\ell w_\ell[1-A(\hat cw_\ell)]=D$.
+
+Backend-agnostic (:mod:`closure_glrt.backend`): closures and weights of shape ``(..., L)``
+on the backend ``backend_name`` give one value per zone, shape ``(...)``, in their dtype.
+Padding cells have weight 0 and a finite closure (e.g. 0). p-values and thresholds are
+computed on the host (scipy), at the boundary.
 """
 
+from typing import Union
+
 import numpy as np
-from scipy import special, stats
+from scipy import stats
+
+from closure_glrt.backend import (
+    Array,
+    Backend,
+    bessel_i0e,
+    bessel_i1e,
+    cast_like,
+    get_backend_module,
+    get_data_on_device,
+    to_numpy,
+)
+from closure_glrt.detection import Detector
 
 __all__ = [
     "weighted_resultant",
@@ -33,164 +54,195 @@ __all__ = [
     "threshold",
     "glrt_known_scale",
     "confidence_halfwidth",
+    "ScaleFreeClosureGLRT",
 ]
 
-
-class _Numpy:
-    lib = np
-    i0e, i1e = staticmethod(special.i0e), staticmethod(special.i1e)
-    atan2 = staticmethod(np.arctan2)
+_X_ASYMPT = 30.0
+_N_ITER = 100
 
 
-def _ns(x):
-    """numpy or torch namespace of ``x``."""
-    if type(x).__module__.startswith("torch"):
-        import torch
-
-        class _Torch:
-            lib = torch
-            i0e, i1e = staticmethod(torch.special.i0e), staticmethod(torch.special.i1e)
-            atan2 = staticmethod(torch.atan2)
-
-        return _Torch
-    return _Numpy
+def weighted_resultant(phi: Array, weights: Array, backend_name: Union[str, Backend] = "numpy"):
+    r"""$R$, $\hat\mu$, $C$ and $W$ of $\sum_\ell w_\ell e^{j\hat\Phi_\ell}$."""
+    be = get_backend_module(backend_name)
+    re, im = (weights * be.cos(phi)).sum(-1), (weights * be.sin(phi)).sum(-1)
+    return be.hypot(re, im), be.arctan2(im, re), re, weights.sum(-1)
 
 
-def _as_float(x, like=None):
-    if like is not None and _ns(like) is not _Numpy:
-        return like.new_tensor(x) if not hasattr(x, "to") else x.to(like)
-    if _ns(x) is not _Numpy:
-        return x.double()
-    return np.asarray(x, dtype=np.float64)
+def _deficits(phi, w, backend_name):
+    """mu-hat, W - R, W - C (without cancellation), and R."""
+    be = get_backend_module(backend_name)
+    re, im = (w * be.cos(phi)).sum(-1), (w * be.sin(phi)).sum(-1)
+    mu = be.arctan2(im, re)
+    d1 = (2 * w * be.sin((phi - mu[..., None]) / 2) ** 2).sum(-1)
+    d0 = (2 * w * be.sin(phi / 2) ** 2).sum(-1)
+    return mu, d1, d0, be.hypot(re, im), re
 
 
-def weighted_resultant(phi, weights):
-    r"""$R$, $\hat\mu$, $C$ and $W=\sum_\ell w_\ell$ of $\sum_\ell w_\ell e^{j\hat\Phi_\ell}$."""
-    phi = _as_float(phi)
-    w = _as_float(weights, like=phi)
-    ns = _ns(phi)
-    xp = ns.lib
-    re, im = (w * xp.cos(phi)).sum(-1), (w * xp.sin(phi)).sum(-1)
-    return xp.hypot(re, im), ns.atan2(im, re), re, w.sum(-1)
+def _one_minus_A(x, backend_name):
+    r"""$1-I_1(x)/I_0(x)$; series $\frac1{2x}+\frac1{8x^2}+\frac1{8x^3}+\frac{25}{128x^4}+\frac{13}{32x^5}$ for large $x$."""
+    be = get_backend_module(backend_name)
+    large = x > _X_ASYMPT
+    one = be.ones_like(x)
+    xs = be.where(large, one, x)
+    direct = 1 - bessel_i1e(backend_name, xs) / bessel_i0e(backend_name, xs)
+    u = 1 / be.where(large, x, one)
+    series = u * (0.5 + u * (0.125 + u * (0.125 + u * (25 / 128 + u * 13 / 32))))
+    return be.where(large, series, direct)
 
 
-def _g(c, w, ns):
-    """g(c) = sum_l log I0(c w_l); c (...), w (..., L)."""
-    x = c[..., None] * w
-    return (ns.lib.log(ns.i0e(x)) + x).sum(-1)
+def _deficit_fun(c, w, backend_name):
+    """S(c) = sum_l w_l [1 - A(c w_l)] = W - g'(c), decreasing from W to 0."""
+    return (w * _one_minus_A(c[..., None] * w, backend_name)).sum(-1)
 
 
-def _gprime(c, w, ns):
-    """g'(c) = sum_l w_l A(c w_l), A = I1 / I0."""
-    x = c[..., None] * w
-    return (w * ns.i1e(x) / ns.i0e(x)).sum(-1)
+def _log_i0e_sum(c, w, backend_name):
+    be = get_backend_module(backend_name)
+    return be.log(bessel_i0e(backend_name, c[..., None] * w)).sum(-1)
 
 
-def _bisect_logc(fun, target, w, ns, n_iter):
-    """Root in c of an increasing ``fun(c)`` = target, by bisection in log c on [e^-40, e^40]."""
-    xp = ns.lib
-    lo = xp.full_like(target, -40.0)
-    hi = xp.full_like(target, 40.0)
+def _bisect_logc(fun, target, backend_name, decreasing, n_iter=_N_ITER):
+    """Root in c of a monotone ``fun(c) = target``, bisection in log c on [e^-40, e^40]."""
+    be = get_backend_module(backend_name)
+    lo = be.full_like(target, -40.0)
+    hi = be.full_like(target, 40.0)
     for _ in range(n_iter):
         mid = (lo + hi) / 2
-        above = fun(xp.exp(mid)) > target
-        hi = xp.where(above, mid, hi)
-        lo = xp.where(above, lo, mid)
-    return xp.exp((lo + hi) / 2)
+        f = fun(be.exp(mid))
+        go_right = (f > target) if decreasing else (f < target)
+        lo = be.where(go_right, mid, lo)
+        hi = be.where(go_right, hi, mid)
+    return be.exp((lo + hi) / 2)
 
 
-def scale_ml(X, weights, n_iter=100):
-    r"""Root $\hat c$ of $g'(\hat c)=\sum_\ell w_\ell A(\hat cw_\ell)=X$.
-
-    $X=R$ gives the maximum likelihood scale under $\mathcal H_1$, $X=\max(C,0)$ under
-    $\mathcal H_0$. Returns 0 where $X\le0$ and ``inf`` where $X\ge W$.
-    """
-    X = _as_float(X)
-    w = _as_float(weights, like=X)
-    ns = _ns(X)
-    xp = ns.lib
-    c = _bisect_logc(lambda c: _gprime(c, w, ns), X, w, ns, n_iter)
-    c = xp.where(X <= 0, xp.zeros_like(c), c)
-    return xp.where(X >= w.sum(-1), xp.full_like(c, float("inf")), c)
+def _scale_from_deficit(D, w, backend_name):
+    """c with S(c) = D; 0 where D >= W (X <= 0), inf where D <= 0 (X >= W)."""
+    be = get_backend_module(backend_name)
+    c = _bisect_logc(lambda c: _deficit_fun(c, w, backend_name), D, backend_name, True)
+    c = be.where(D >= w.sum(-1), be.zeros_like(c), c)
+    return be.where(D <= 0, be.full_like(c, float("inf")), c)
 
 
-def legendre(X, weights, c=None):
-    r"""$g^*(X)=\hat cX-g(\hat c)$ at the root $\hat c$ of :func:`scale_ml`; 0 for $X\le0$."""
-    X = _as_float(X)
-    w = _as_float(weights, like=X)
-    ns = _ns(X)
-    xp = ns.lib
+def _gstar_from_deficit(D, w, backend_name, c=None):
+    """g*(W - D) = -c D - sum log I0e(c w); 0 where D >= W, inf where D <= 0."""
+    be = get_backend_module(backend_name)
     if c is None:
-        c = scale_ml(X, w)
-    out = c * X - _g(c, w, ns)
-    return xp.where(X <= 0, xp.zeros_like(out), out)
+        c = _scale_from_deficit(D, w, backend_name)
+    finite = be.isfinite(c)
+    cs = be.where(finite, c, be.zeros_like(c))
+    out = -cs * D - _log_i0e_sum(cs, w, backend_name)
+    out = be.where(D >= w.sum(-1), be.zeros_like(out), out)
+    return be.where(finite, out, be.full_like(out, float("inf")))
 
 
-def glrt(phi, weights, details=False):
+def scale_ml(X: Array, weights: Array, backend_name: Union[str, Backend] = "numpy") -> Array:
+    r"""Root $\hat c$ of $g'(\hat c)=\sum_\ell w_\ell A(\hat cw_\ell)=X$ (0 if $X\le0$, inf if $X\ge W$).
+
+    For $X$ close to $W$ prefer :func:`glrt` with ``details=True``, which forms $W-X$
+    without cancellation.
+    """
+    return _scale_from_deficit(weights.sum(-1) - X, weights, backend_name)
+
+
+def legendre(X: Array, weights: Array, backend_name: Union[str, Backend] = "numpy") -> Array:
+    r"""$g^*(X)$; 0 for $X\le0$."""
+    return _gstar_from_deficit(weights.sum(-1) - X, weights, backend_name)
+
+
+def glrt(phi: Array, weights: Array, backend_name: Union[str, Backend] = "numpy",
+         details: bool = False):
     r"""Exact statistic $\Lambda=2[g^*(R)-g^*(\max(C,0))]$ per zone.
 
     With ``details=True`` returns a dict with ``lam``, ``mu`` ($\hat\mu$), ``c1`` and ``c0``
-    (scales under $\mathcal H_1$ and $\mathcal H_0$), ``R``, ``C``, ``W``.
+    (ML scales under $\mathcal H_1$ and $\mathcal H_0$), ``R``, ``C``, ``W``.
     """
-    R, mu, C, W = weighted_resultant(phi, weights)
-    ns = _ns(R)
-    xp = ns.lib
-    w = xp.broadcast_to(_as_float(weights, like=R), tuple(np.shape(phi)))
-    C0 = xp.where(C > 0, C, xp.zeros_like(C))
-    c1, c0 = scale_ml(R, w), scale_ml(C0, w)
-    lam = 2 * (legendre(R, w, c1) - legendre(C0, w, c0))
+    be = get_backend_module(backend_name)
+    w = be.broadcast_to(weights, phi.shape)
+    mu, d1, d0, R, C = _deficits(phi, w, backend_name)
+    W = w.sum(-1)
+    d0 = be.where(d0 > W, W, d0)  # C <= 0: g*(max(C, 0)) = g*(0) = 0
+    c1 = _scale_from_deficit(d1, w, backend_name)
+    c0 = _scale_from_deficit(d0, w, backend_name)
+    lam = 2 * (_gstar_from_deficit(d1, w, backend_name, c1)
+               - _gstar_from_deficit(d0, w, backend_name, c0))
+    lam = be.where(lam > 0, lam, be.zeros_like(lam))
     if details:
         return {"lam": lam, "mu": mu, "c1": c1, "c0": c0, "R": R, "C": C, "W": W}
     return lam
 
 
-def _to_numpy(x):
-    return x.detach().cpu().numpy() if hasattr(x, "detach") else np.asarray(x, dtype=np.float64)
-
-
-def pvalue(lam, n_cells):
-    r"""p-value of $\Lambda$: $P(F_{1,L-1}>(L-1)(e^{\Lambda/L}-1))$ (numpy output)."""
-    lam, L = _to_numpy(lam), np.asarray(_to_numpy(n_cells), dtype=np.float64)
+def pvalue(lam, n_cells) -> np.ndarray:
+    r"""p-value of $\Lambda$, $P(F_{1,L-1}>(L-1)(e^{\Lambda/L}-1))$, on the host."""
+    lam = to_numpy(lam).astype(np.float64)
+    L = np.asarray(to_numpy(n_cells), dtype=np.float64)
     f = (L - 1) * np.expm1(np.clip(lam, 0, None) / L)
     return stats.f.sf(f, 1, L - 1)
 
 
-def threshold(n_cells, pfa):
-    r"""Threshold $L\log(1+F^{-1}_{1,L-1}(1-P_{fa})/(L-1))$ on $\Lambda$."""
+def threshold(n_cells, pfa: float) -> np.ndarray:
+    r"""Threshold $L\log(1+F^{-1}_{1,L-1}(1-P_{fa})/(L-1))$ on $\Lambda$, on the host."""
     L = np.asarray(n_cells, dtype=np.float64)
     return L * np.log1p(stats.f.ppf(1 - pfa, 1, L - 1) / (L - 1))
 
 
-def glrt_known_scale(phi, weights, scale=1.0):
+def glrt_known_scale(phi: Array, weights: Array, scale: float = 1.0,
+                     backend_name: Union[str, Backend] = "numpy") -> Array:
     r"""GLRT with the scale known, $\Lambda=2c(R-C)$, compared with $\chi^2_1$.
 
     ``scale=1`` with $w_\ell=\kappa_{0,\ell}$ at the nominal looks is the nominal-looks test;
     ``scale`` $=N_{\mathrm{eff}}/N$ is the plug-in ENL test.
     """
-    R, _, C, _ = weighted_resultant(phi, weights)
-    return 2 * scale * (R - C)
+    be = get_backend_module(backend_name)
+    w = be.broadcast_to(weights, phi.shape)
+    _, d1, d0, _, _ = _deficits(phi, w, backend_name)
+    return 2 * scale * (d0 - d1)
 
 
-def confidence_halfwidth(phi, weights, alpha=0.05, n_iter=100):
+def confidence_halfwidth(phi: Array, weights: Array, alpha: float = 0.05,
+                         backend_name: Union[str, Backend] = "numpy") -> Array:
     r"""Half-width $h$ of the $1-\alpha$ confidence arc $|\mu-\hat\mu|\le h$ (exact statistic).
 
     Testing $\mu=\mu_0$ is testing 0 on the closures rotated by $-\mu_0$, which keeps $R$ and
-    replaces $C$ by $R\cos(\hat\mu-\mu_0)$. The statistic decreases in $|\hat\mu-\mu_0|$, so the
-    accepted set is an arc whose edge satisfies $g^*(R\cos h)=g^*(R)-\eta/2$, $\eta$ the
-    threshold at level $\alpha$. On $X>0$, $g^*$ is parametrised by $c$ as
-    $(X,g^*)=(g'(c),\,cg'(c)-g(c))$, increasing in $c$: one bisection gives $c^*$ and
-    $h=\arccos(g'(c^*)/R)$. $h=\pi$ when $g^*(R)\le\eta/2$ (the zone does not constrain $\mu$).
+    replaces $C$ by $R\cos(\hat\mu-\mu_0)$. The statistic increases with $|\hat\mu-\mu_0|$, so
+    the accepted set is an arc whose edge satisfies $g^*(R\cos h)=g^*(R)-\eta/2$, $\eta$ the
+    threshold at level $\alpha$. On $X>0$, $g^*$ is parametrised by $c$:
+    $g^*=-cS(c)-\sum\log\tilde I_0(cw_\ell)$ at $X=W-S(c)$, increasing in $c$; one bisection
+    gives $c^*$, then $1-\cos h=(S(c^*)-(W-R))/R$. $h=\pi$ when $g^*(R)\le\eta/2$.
     """
-    R, _, _, _ = weighted_resultant(phi, weights)
-    ns = _ns(R)
-    xp = ns.lib
-    w = xp.broadcast_to(_as_float(weights, like=R), tuple(np.shape(phi)))
-    L = (w > 0).sum(-1)
-    eta = _as_float(threshold(_to_numpy(L), alpha), like=R)
-    target = legendre(R, w) - eta / 2
-    gstar = lambda c: c * _gprime(c, w, ns) - _g(c, w, ns)  # noqa: E731
-    cstar = _bisect_logc(gstar, target, w, ns, n_iter)
-    ratio = _gprime(cstar, w, ns) / R
-    ratio = xp.where(ratio > 1, xp.ones_like(ratio), ratio)
-    h = xp.arccos(ratio)
-    return xp.where(target <= 0, xp.full_like(h, np.pi), h)
+    be = get_backend_module(backend_name)
+    w = be.broadcast_to(weights, phi.shape)
+    _, d1, _, R, _ = _deficits(phi, w, backend_name)
+    eta = threshold(to_numpy((w > 0).sum(-1)), alpha)
+    eta = cast_like(get_data_on_device(eta, backend_name), R, backend_name)
+    target = _gstar_from_deficit(d1, w, backend_name) - eta / 2
+
+    def gstar_c(c):
+        return -c * _deficit_fun(c, w, backend_name) - _log_i0e_sum(c, w, backend_name)
+
+    cstar = _bisect_logc(gstar_c, target, backend_name, decreasing=False)
+    delta = (_deficit_fun(cstar, w, backend_name) - d1) / R   # 1 - cos h
+    delta = be.where(delta > 0, delta, be.zeros_like(delta))
+    delta = be.where(delta < 2, delta, 2 * be.ones_like(delta))
+    h = 2 * be.arcsin(be.sqrt(delta / 2))
+    return be.where(target <= 0, be.full_like(h, np.pi), h)
+
+
+class ScaleFreeClosureGLRT(Detector):
+    """Zone detector: :func:`glrt` as ``compute``, the $F(1, L-1)$ threshold as ``get_threshold``.
+
+    Parameters
+    ----------
+    n_cells : int
+        Number of cells $L$ per zone.
+    backend_name : str or Backend
+    """
+
+    def __init__(self, n_cells: int, backend_name: Union[str, Backend] = "numpy"):
+        self.n_cells = n_cells
+        self.backend_name = backend_name
+
+    def compute(self, X: Array, weights: Array) -> Array:
+        """Statistic per zone; ``X`` are the closures ``(..., L)``, ``weights`` the precisions."""
+        return glrt(X, weights, self.backend_name)
+
+    def get_threshold(self, pfa: float) -> float:
+        return float(threshold(self.n_cells, pfa))
