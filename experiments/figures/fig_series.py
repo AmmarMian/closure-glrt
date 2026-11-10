@@ -1,6 +1,6 @@
 r"""Fig. 7 of the paper (one column): closures along the series and by crop.
 
-(a) Detected share $\rho_t$ per triplet for the coherent zone classes (one blue step per class,
+(a) Detected share $\rho_t$ per triplet for coherent zone classes (one blue step per class,
 light to dark with the coherence), with the nominal rate; the same-day triplets are shaded.
 (b) By crop (CDL), for two triplets: share of the zones detected with a negative closure (left,
 red) and with a positive closure (right, blue).
@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from style import COLUMN, GRID, INK, MUTED, panel_label, style
 
-CLASS_COLORS = ("#86b6ef", "#2a78d6", "#104281")   # ordinal blue ramp, validated on white
+CLASS_COLORS = ("#6da7ec", "#184f95")   # ordinal blue ramp (two steps), validated on white
 POS, NEG = "#2a78d6", "#e34948"                     # diverging poles: closure > 0, < 0
 SHORT = {"other tree crops": "tree crops", "grass/pasture": "grass, pasture",
          "fallow/idle": "fallow", "developed open": "developed"}
@@ -48,7 +48,7 @@ def main(args):
     rows = read(Path(args.weather) / "triplets.csv")
     t = np.array([int(r["triplet"]) for r in rows])
     sameday = np.array([r["date1"] == r["date2"] == r["date3"] for r in rows])
-    classes = [k[len("share_"):] for k in rows[0] if k.startswith("share_")]
+    classes = args.classes
 
     fig = plt.figure(figsize=(COLUMN, 3.6))
     outer = fig.add_gridspec(2, 1, height_ratios=[1.35, 1.75], hspace=0.38,
@@ -116,6 +116,8 @@ if __name__ == "__main__":
     p.add_argument("--landcover", required=True, help="Run of closure_landcover.py.")
     p.add_argument("--triplets", type=int, nargs=2, default=[12, 13])
     p.add_argument("--min-zones", type=int, default=1000, help="Crops kept in (d).")
+    p.add_argument("--classes", nargs="+", default=["0.5-0.7", "0.7-0.9"],
+                   help="Classes of (a); the >= 0.9 class has too few zones on many triplets.")
     p.add_argument("--min-zones-series", type=int, default=1000,
                    help="Triplets of a class with fewer zones are left out of (a).")
     p.add_argument("--pfa", type=float, default=0.01)
