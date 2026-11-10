@@ -14,6 +14,9 @@ weakest coherence of the cell, ``--classes``); speckle is filtered with the meas
 
 False alarm: closure 0, every class, measured and white speckle. Power: closures ``--closures``
 (degrees, common to the zone) in the zones of $\bar\gamma\ge$ ``--power-min-coh``, measured speckle.
+With ``--independent-cells``, every cell is drawn from its own speckle field (the model of the
+test: independent cells, correlated pixels within a cell); by default one field per zone is cut
+into adjacent cells, as on the images, so that neighbouring cells are slightly dependent.
 
 Outputs (run directory): ``pfa.csv`` (window, speckle, class, zones, test, rate), ``power.csv``
 (window, closure_deg, zones, test, rate, median $|\hat\mu|$ of the scale-free fit),
@@ -86,10 +89,18 @@ def valid_with_closure(g, closure):
     return (np.linalg.eigvalsh(R) > 1e-6).all(-1).all(-1)
 
 
-def simulate(g, window, zone, rng, h_az, h_rg, closure, batch):
+def simulate(g, window, zone, rng, h_az, h_rg, closure, batch, independent=False):
+    """Zone lags (B, L, 3, 3). ``independent``: each cell is drawn from its own speckle field,
+    so that the cells of a zone are independent (the model of the test); otherwise one field
+    per zone is cut into adjacent cells, as on the images."""
     R = coherence_matrix(g[..., 0], g[..., 1], g[..., 2])
-    return np.concatenate([simulate_zones(R[s:s + batch], window, zone, rng, h_az, h_rg, closure)
-                           for s in range(0, len(R), batch)])
+    B, L = R.shape[:2]
+    if independent:
+        R = R.reshape(B * L, 1, 3, 3)
+        zone, batch = (1, 1), batch * L
+    out = np.concatenate([simulate_zones(R[s:s + batch], window, zone, rng, h_az, h_rg, closure)
+                          for s in range(0, len(R), batch)])
+    return out.reshape(B, L, 3, 3)
 
 
 def main(args):
@@ -123,7 +134,8 @@ def main(args):
                 if len(idx) < 100:
                     continue
                 pick = rng.choice(idx, args.zones, replace=len(idx) < args.zones)
-                lz = simulate(g_all[pick], window, zone, rng, h_az, h_rg, 0.0, args.batch)
+                lz = simulate(g_all[pick], window, zone, rng, h_az, h_rg, 0.0, args.batch,
+                              args.independent_cells)
                 dec, _ = run_tests(lz, n_looks, c_eff, args.pfa, L)
                 for test in TESTS:
                     pfa_rows.append({"window": wname, "speckle": speckle, "class": f"{lo:g}-{hi:g}",
@@ -139,7 +151,8 @@ def main(args):
             idx = idx0[valid_with_closure(g_all[idx0], np.radians(mu))]
             summary[f"{wname}|power|{mu:g}|valid_zones"] = [int(len(idx)), int(len(idx0))]
             pick = rng.choice(idx, args.power_zones, replace=len(idx) < args.power_zones)
-            lz = simulate(g_all[pick], window, zone, rng, h_az, h_rg, np.radians(mu), args.batch)
+            lz = simulate(g_all[pick], window, zone, rng, h_az, h_rg, np.radians(mu), args.batch,
+                          args.independent_cells)
             dec, mu_hat = run_tests(lz, n_looks, c_eff, args.pfa, L)
             for test in TESTS:
                 power_rows.append({"window": wname, "closure_deg": mu, "zones": int(len(dec[test])),
@@ -182,6 +195,9 @@ if __name__ == "__main__":
     parser.add_argument("--pfa", type=float, default=0.01)
     parser.add_argument("--taps", type=int, default=8)
     parser.add_argument("--batch", type=int, default=1000)
+    parser.add_argument("--independent-cells", action="store_true",
+                        help="One speckle field per cell (cells of a zone independent, as in the "
+                             "model); default: one field per zone cut into adjacent cells.")
     parser.add_argument("--seed", type=int, default=0)
     cli.add_run_arguments(parser, task="pfa-power")
     args = parser.parse_args()
