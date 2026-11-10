@@ -15,8 +15,12 @@ $d_\ell=\operatorname{wrap}(\hat\Phi_\ell-\hat\mu)$ of all zones are then on a c
   $s=\Phi^{-1}(u)$ the mean of $s^2$ (1), $P(|s|>2)$ (0.0455) and $P(|s|>3)$ (0.0027);
 * precision against $\kappa_{0,\ell}$: cells binned by $\kappa_{0,\ell}$; in each bin the
   concentration $\hat\kappa$ of the residuals ($A(\hat\kappa)=$ mean of $\cos d$), divided by the
-  bin's median $\kappa_{0}$. The model predicts a flat profile at the level $c$; $c=1$ is the
-  nominal number of looks.
+  bin's median $\kappa_{0}$ (the model predicts a flat profile at the level $c$; $c=1$ is the
+  nominal number of looks), and the 95 % quantile of $|d|$, empirical and predicted by
+  $\mathcal{VM}(0,\hat c\kappa_{0,\ell})$ and by $\mathcal{VM}(0,\kappa_{0,\ell})$.
+
+The class ``all`` pools the cells of every class; ``scores.npz`` also holds the histograms of the
+normal scores ($\ldots$``|<law>|hist`` on ``z_edges``).
 
 $\hat\mu$ and $\hat c$ are fitted on the same cells, which pulls the residuals in slightly
 ($\approx 1/L$). The same pipeline is applied to zones simulated under the model in UAVSAR
@@ -93,32 +97,49 @@ def a_inverse(r):
     return np.exp((lo + hi) / 2)
 
 
-def precision_profile(d, kappa, n_bins=24, min_cells=2000):
-    """Bins of log kappa0: median kappa0, n, concentration of d / median kappa0."""
+def abs_quantile(kappa, level=0.95):
+    """Quantile ``level`` of |d| for a mixture of VM(0, kappa_i) with equal weights (bisection)."""
+    lo, hi = 0.0, np.pi
+    for _ in range(40):
+        q = (lo + hi) / 2
+        inside = np.mean(2 * stats.vonmises.cdf(q, kappa) - 1)
+        lo, hi = (q, hi) if inside < level else (lo, q)
+    return (lo + hi) / 2
+
+
+def precision_profile(d, kappa, c, n_bins=24, min_cells=2000, model_cells=3000, rng=None):
+    """Bins of log kappa0: median kappa0, n, concentration of d / median kappa0, and the 95 %
+    quantile of |d|: empirical, under the model VM(0, c kappa0) and under VM(0, kappa0)."""
     lk = np.log10(kappa)
     edges = np.quantile(lk, np.linspace(0.0005, 0.9995, n_bins + 1))
     idx = np.digitize(lk, edges) - 1
-    k_med, scale, n = [], [], []
+    rng = rng or np.random.default_rng(0)
+    out = {k: [] for k in ("kappa0", "scale", "n", "q95", "q95_model", "q95_nominal")}
     for b in range(n_bins):
-        sel = idx == b
-        if sel.sum() < min_cells:
+        sel = np.flatnonzero(idx == b)
+        if len(sel) < min_cells:
             continue
         km = float(np.median(kappa[sel]))
-        k_med.append(km)
-        scale.append(float(a_inverse(np.mean(np.cos(d[sel])))) / km)
-        n.append(int(sel.sum()))
-    return np.array(k_med), np.array(scale), np.array(n)
+        sub = rng.choice(sel, min(model_cells, len(sel)), replace=False)
+        out["kappa0"].append(km)
+        out["scale"].append(float(a_inverse(np.mean(np.cos(d[sel])))) / km)
+        out["n"].append(len(sel))
+        out["q95"].append(float(np.quantile(np.abs(d[sel]), 0.95)))
+        out["q95_model"].append(abs_quantile(c[sub] * kappa[sub]))
+        out["q95_nominal"].append(abs_quantile(kappa[sub]))
+    return {k: np.array(v) for k, v in out.items()}
 
 
 def evaluate(writer, scores, key, d, kappa, c, z, gmin, classes, max_cells, rng):
     base = "|".join(map(str, key))
-    for lo, hi in zip(classes[:-1], classes[1:]):
+    bounds = list(zip(classes[:-1], classes[1:])) + [(classes[0], classes[-1] + 1e-9)]
+    for lo, hi in bounds:
         sel = np.flatnonzero((gmin >= lo) & (gmin < hi))
         if len(sel) < 100:
             continue
         if len(sel) > max_cells:
             sel = rng.choice(sel, max_cells, replace=False)
-        cl = f"{lo:g}-{hi:g}"
+        cl = f"{lo:g}-{hi:g}" if hi <= classes[-1] else "all"
         scores[f"{base}|{cl}|z_hist"] = np.histogram(z[sel], Z_EDGES, density=True)[0]
         for law in LAWS:
             u = np.clip(pit(d[sel], kappa[sel], c[sel], law), 1e-12, 1 - 1e-12)
@@ -130,6 +151,7 @@ def evaluate(writer, scores, key, d, kappa, c, z, gmin, classes, max_cells, rng)
                 "mean_s2": float((s**2).mean()), "p_abs_gt2": float((np.abs(s) > 2).mean()),
                 "p_abs_gt3": float((np.abs(s) > 3).mean())})
             scores[f"{base}|{cl}|{law}"] = np.quantile(s, PROBS)
+            scores[f"{base}|{cl}|{law}|hist"] = np.histogram(s, Z_EDGES, density=True)[0]
 
 
 def simulated_lags(lags_real, window, zone, n_zones, h_az, h_rg, rng, batch=1000):
@@ -169,9 +191,9 @@ def main(args):
         key = (source, wname, t)
         evaluate(writer, scores, key, d.ravel(), kappa.ravel(), c.ravel(), z.ravel(), gmin.ravel(),
                  args.classes, args.max_cells, rng)
-        k_med, scale, n = precision_profile(d.ravel(), kappa.ravel())
         base = "|".join(map(str, key))
-        profiles.update({f"{base}|kappa0": k_med, f"{base}|scale": scale, f"{base}|n": n})
+        prof = precision_profile(d.ravel(), kappa.ravel(), c.ravel(), rng=rng)
+        profiles.update({f"{base}|{k}": v for k, v in prof.items()})
         cz = c[:, 0]
         summary.append({"source": source, "window": wname, "triplet": t, "zones": int(len(phi)),
                         "c_quartiles": np.quantile(cz[np.isfinite(cz)],
