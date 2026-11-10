@@ -22,6 +22,9 @@ io = ["h5py>=3.10"]    # OPERA CSLC reader
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
+figures = [
+    "matplotlib>=3.11.2",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/closure_glrt"]
