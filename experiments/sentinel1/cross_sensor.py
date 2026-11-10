@@ -249,9 +249,10 @@ def block_bootstrap(keys, a, b, block, n_boot, rng, corr):
     ix, iy = keys // 1_000_000, keys % 1_000_000
     _, inv = np.unique((ix // block) * 1_000_000 + iy // block, return_inverse=True)
     members = [np.flatnonzero(inv == k) for k in range(inv.max() + 1)]
-    rs = [corr(*(x[np.concatenate([members[k] for k in rng.integers(0, len(members),
-                                                                    len(members))])]
-                 for x in (a, b))) for _ in range(n_boot)]
+    rs = []
+    for _ in range(n_boot):
+        pick = np.concatenate([members[k] for k in rng.integers(0, len(members), len(members))])
+        rs.append(corr(a[pick], b[pick]))
     return np.quantile(rs, [0.025, 0.975])
 
 
