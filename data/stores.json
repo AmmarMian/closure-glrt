@@ -1,0 +1,66 @@
+{
+ "uavsar-scan-s1": {
+  "source_run": "20261023T0938_scan-sdelta-s1_7739725",
+  "note": "paper store (built with HH, HV, VV; VV arrays hashed). Content SHA-256 of raw C-order bytes, see experiments/stores/verify_store.py",
+  "arrays": {
+   "VV/lags": {
+    "shape": [
+     4444,
+     1980,
+     68,
+     3
+    ],
+    "dtype": "complex64",
+    "sha256": "cfbc2fe61ca77ffaaf05886ecd428d100155323dd4a8b5629b66bb10789cb5ac"
+   },
+   "VV/amp_mean": {
+    "shape": [
+     66664,
+     9900
+    ],
+    "dtype": "float32",
+    "sha256": "fd1d7989d427ea35c8be0241e63b0f492645457135f441bb26c084cec2f121a4"
+   },
+   "VV/amp_disp": {
+    "shape": [
+     66664,
+     9900
+    ],
+    "dtype": "float32",
+    "sha256": "f6e165fdd5a2302a675a94877ffb34aba0276d126f2217055ceef5d0d3140d19"
+   }
+  }
+ },
+ "uavsar-scan-s2": {
+  "source_run": "20261027T0843_scan-sdelta-s2_724e285",
+  "note": "paper store (built with HH, HV, VV; VV arrays hashed). Content SHA-256 of raw C-order bytes, see experiments/stores/verify_store.py",
+  "arrays": {
+   "VV/lags": {
+    "shape": [
+     4706,
+     1980,
+     68,
+     3
+    ],
+    "dtype": "complex64",
+    "sha256": "2e2c7cf37abe14bc80940481c897f5cce94b14fdfde1c552ea7d3fb6c6033e28"
+   },
+   "VV/amp_mean": {
+    "shape": [
+     70603,
+     9900
+    ],
+    "dtype": "float32",
+    "sha256": "8406cf3acd99483d17e48a354fa784aa21c74c08eeb5ff1353f10eb0b8828c82"
+   },
+   "VV/amp_disp": {
+    "shape": [
+     70603,
+     9900
+    ],
+    "dtype": "float32",
+    "sha256": "8035db7ee85efe9f3587e221828d8d51d6b3f56d68598655cf0fe2bfdd91cff1"
+   }
+  }
+ }
+}
