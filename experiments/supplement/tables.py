@@ -98,24 +98,29 @@ def sameday_tables(sameday, scan, pfa):
         diag = read(Path(sameday[seg]) / "diagnostics.csv")
         summ = {(r["window"], r["triplet"], r["class"]): r for r in read(Path(scan[seg]) /
                 "summary.csv") if r["class_def"] == "gbar_own"}
+        arc = {(r["window"], r["triplet"], r["key"]): r for r in diag
+               if r["quantity"] == "arc_halfwidth_deg"}
         for r in diag:
             if r["quantity"] == "share":
                 s = summ[r["window"], r["triplet"], r["key"]]
+                h = arc[r["window"], r["triplet"], r["key"]]
                 rows.append([seg, r["window"], r["triplet"], cls(r["key"]), r["zones"],
                              pct(r["scale_free"]), pct(r["equal_weights"]),
                              f"{float(s['median_abs_mu_deg']):.2f}",
+                             f"{float(h['median_all']):.2f}",
                              f"{float(s['median_c1']):.2f}"])
-            else:
+            elif r["quantity"] == "same_sign":
                 rows_sign.append([seg, r["window"], r["triplet"], r["key"].replace("d=", ""),
                                   r["zones"], pct(r["scale_free"])])
     cap = (rf"Same-day triplets: detected share (\%, $\Pfa={pfa:g}$) per class of the zone "
            r"coherence of the tested triplet \eqref{eq:zonecoh}, for the scale-free test and the "
-           r"equal-weights test, and median $\abs{\hat\meandir}$ (deg) and $\hat c$ of all the "
-           r"zones. " + "; ".join(f"{seg}: {cite(sameday[seg])} and {cite(scan[seg])}"
-                                  for seg in sorted(sameday)) + ".")
+           r"equal-weights test, and median over all the zones of $\abs{\hat\meandir}$ (deg), of "
+           r"the half-width $\Delta$ of the $95\%$ confidence arc (deg) and of $\hat c$. "
+           + "; ".join(f"{seg}: {cite(sameday[seg])} and {cite(scan[seg])}"
+                       for seg in sorted(sameday)) + ".")
     head = (r"Seg. & Cells & $t$ & $\zonecoh$ & Zones & Scale-free & Equal w. & "
-            r"$\abs{\hat\meandir}$ & $\hat c$")
-    t1 = longtable("lllrrrrrr", head, rows, cap, "tab:sameday")
+            r"$\abs{\hat\meandir}$ & $\Delta$ & $\hat c$")
+    t1 = longtable("lllrrrrrrr", head, rows, cap, "tab:sameday")
     cap2 = (r"Same-day triplets: share (\%) of the pairs of detected zones of $\zonecoh\ge0.5$, "
             r"$d$ zones apart along azimuth and range, with the same sign of $\hat\meandir$ "
             r"(noise: 50\%). "
