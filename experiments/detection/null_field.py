@@ -33,7 +33,7 @@ import zarr
 from scipy import ndimage
 
 from closure_glrt import cli
-from closure_glrt.closure import tile_zones, triplet_quantities
+from closure_glrt.closure import neighbor_concentration, tile_zones, triplet_quantities
 from closure_glrt.glrt import glrt, pvalue
 from closure_glrt.provenance import finish_run, start_run
 from closure_glrt.simulation import coherence_matrix, kernel_from_spectrum, simulate_zones
@@ -50,11 +50,15 @@ def cell_coherences(lags):
                          np.abs(lags[..., 0, 2]) / np.sqrt(P[..., 0] * P[..., 2])], -1)
 
 
-def zone_maps(lags, n_looks, zone):
-    """p, mu-hat and gbar (median weakest coherence) of the zones of a cell grid of lags."""
+def zone_maps(lags, n_looks, zone, weights="own"):
+    """p, mu-hat and gbar (median weakest coherence) of the zones of a cell grid of lags.
+    ``weights``: ``own`` (precision of each cell) or ``nb`` (from the neighbors of the cell)."""
     phi, kappa, gmin = (x[..., 0] for x in triplet_quantities(lags, n_looks))
     zp, zk, zg = (tile_zones(x, zone) for x in (phi, kappa, gmin))
-    ok = np.isfinite(zp).all(-1) & np.isfinite(zk).all(-1)
+    if weights == "nb":
+        with np.errstate(all="ignore"):
+            zk = neighbor_concentration(tile_zones(lags, zone), n_looks, zone)
+    ok = np.isfinite(zp).all(-1) & np.isfinite(zk).all(-1) & (zk > 0).all(-1)
     p = np.full(ok.shape, np.nan)
     mu = np.full(ok.shape, np.nan)
     r = glrt(zp[ok], zk[ok], details=True)
@@ -116,7 +120,7 @@ def main(args):
     lags = np.asarray(lags_all[i0:i0 + step, :, t:t + 3], dtype=np.complex128)
     Jz = (J // zb) * zb
     lags = lags[:, :Jz]
-    p_r, mu_r, g_r = zone_maps(lags, n_looks, (za, zb))
+    p_r, mu_r, g_r = zone_maps(lags, n_looks, (za, zb), args.weights)
     rows = [("real", 0, *r) for r in statistics(p_r, mu_r, g_r, args.classes, args.pfa,
                                                  args.coh, args.block)]
     g = cell_coherences(lags)                                     # (I, Jz, 3)
@@ -134,7 +138,7 @@ def main(args):
             nr = Rb.shape[0]
             out = simulate_zones(Rb.reshape(1, nr * Jz, 3, 3), (br, bc), (nr, Jz), rng, h_az, h_rg)
             sim[b0:b0 + nr] = out.reshape(nr, Jz, 3, 3)
-        p_s, mu_s, _ = zone_maps(sim, n_looks, (za, zb))
+        p_s, mu_s, _ = zone_maps(sim, n_looks, (za, zb), args.weights)
         p_s[bad.reshape(-1, za, Jz // zb, zb).any((1, 3))] = np.nan
         rows += [("sim", rep, *r) for r in statistics(p_s, mu_s, g_r, args.classes, args.pfa,
                                                        args.coh, args.block)]
@@ -166,6 +170,7 @@ if __name__ == "__main__":
     parser.add_argument("--block", type=int, default=20,
                         help="Zone rows per independently simulated block.")
     parser.add_argument("--reps", type=int, default=3)
+    parser.add_argument("--weights", default="own", choices=["own", "nb"])
     parser.add_argument("--classes", type=float, nargs="+",
                         default=[0.0, 0.2, 0.3, 0.5, 0.7, 0.9, 1.01])
     parser.add_argument("--coh", type=float, default=0.5)

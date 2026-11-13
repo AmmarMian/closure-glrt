@@ -54,14 +54,19 @@ def main(args):
         for t in args.triplets:
             k = triplets.index(t)
             p, mu, gbar = (np.asarray(g[f][k]) for f in ("p", "mu", args.class_def))
+            if args.nb:     # neighbor precisions, stored by zone_scan --extra
+                p, mu = np.asarray(g["p_nb"][k]), np.asarray(g["mu_nb"][k])
             La = aggregate_cells(np.asarray(lags[:, :, t:t + 3], dtype=np.complex128), (a, b))
             phi, kappa, _ = (x[..., 0] for x in triplet_quantities(La, n_looks))
             zp, zk = tile_zones(phi, zone), tile_zones(kappa, zone)
             ok = np.isfinite(zp).all(-1)
             h = np.full(ok.shape, np.nan)
-            h[ok] = np.degrees(to_numpy(confidence_halfwidth(
-                get_data_on_device(zp[ok], args.backend), get_data_on_device(zk[ok], args.backend),
-                args.alpha, args.backend)))
+            if args.nb:
+                h = np.degrees(np.asarray(g["hw_nb"][k], dtype=np.float64))
+            else:
+                h[ok] = np.degrees(to_numpy(confidence_halfwidth(
+                    get_data_on_device(zp[ok], args.backend),
+                    get_data_on_device(zk[ok], args.backend), args.alpha, args.backend)))
             p_eq = np.full(ok.shape, np.nan)
             lam = glrt(get_data_on_device(zp[ok], args.backend),
                        get_data_on_device(np.ones_like(zp[ok]), args.backend), args.backend)
@@ -113,6 +118,8 @@ if __name__ == "__main__":
     parser.add_argument("--pfa", type=float, default=0.01)
     parser.add_argument("--alpha", type=float, default=0.05, help="Level of the confidence arcs.")
     parser.add_argument("--backend", default="numpy")
+    parser.add_argument("--nb", action="store_true",
+                        help="Neighbor precisions (p_nb, mu_nb, hw_nb of zone_scan --extra).")
     cli.add_run_arguments(parser, task="sameday-diagnostics")
     args = parser.parse_args()
     args.factors = args.factors or [[1, 1], [2, 2]]

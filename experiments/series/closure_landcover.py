@@ -115,7 +115,8 @@ def main(args):
             cls = stats.mode(px, axis=1, nan_policy="omit").mode.astype(float)
             cdl_cache[year] = (cls, (px == cls[:, None]).mean(1))
         cls, purity = cdl_cache[year]
-        mu, p, gbar = (np.asarray(g[f][k]).ravel() for f in (args.mu_field, "p", args.class_def))
+        mu, p, gbar = (np.asarray(g[f][k]).ravel()
+                       for f in (args.mu_field, args.p_field, args.class_def))
         keep = np.isfinite(mu) & (gbar >= args.coh) & (purity >= args.purity)
         for c in np.unique(cls[keep]):
             sel = keep & (cls == c)
@@ -145,6 +146,8 @@ if __name__ == "__main__":
     parser.add_argument("--scan-run", required=True, help="Run directory of zone_scan.py.")
     parser.add_argument("--mu-field", default="mu", choices=["mu", "mu_nb", "mu_equal"],
                         help="Estimate of the closure of a zone (mu_nb: neighbor precisions).")
+    parser.add_argument("--p-field", default="p", choices=["p", "p_nb", "p_equal"],
+                        help="p-value of the test (p_nb: neighbor precisions).")
     parser.add_argument("--zones", type=Path, default=None,
                         help="zones.zarr (default: the large dir of --scan-run).")
     parser.add_argument("--llh", type=Path, required=True, help="2x8 .llh of the segment.")
