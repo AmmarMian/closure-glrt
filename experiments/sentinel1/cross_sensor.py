@@ -106,6 +106,22 @@ def group(keys, *values, max_cells=64):
     return uniq, np.minimum(counts, Lmax), out
 
 
+def match_enl(phi, kappa, iu, n_s1, enl_s1_cell, enl_u_cell, rng):
+    """Keep in each common UAVSAR zone ``iu`` a random subset of its valid cells whose total
+    equivalent number of looks matches that of the Sentinel-1 cells of the zone (at least 2
+    cells); the other zones and cells are set to nan."""
+    phi_m = np.full_like(phi, np.nan)
+    kap_m = np.full_like(kappa, np.nan)
+    for z, ns in zip(iu, n_s1):
+        valid = np.flatnonzero(np.isfinite(phi[z]) & np.isfinite(kappa[z]))
+        k = 0
+        if len(valid):
+            k = int(np.clip(np.round(ns * enl_s1_cell / enl_u_cell), 2, len(valid)))
+        keep = rng.choice(valid, k, replace=False) if k else valid[:0]
+        phi_m[z, keep], kap_m[z, keep] = phi[z, keep], kappa[z, keep]
+    return phi_m, kap_m
+
+
 def zone_test(phi, kappa, n_min, alpha, backend):
     """Exact GLRT, p-value, mu, c1, arc half-width and standard error per padded zone."""
     valid = np.isfinite(phi) & np.isfinite(kappa)
@@ -341,10 +357,16 @@ def main(args):
         s_keys, s_res, s_n = s1_zone_results(name)
         u_coh, n_pairs = U.selection_coherence(L, lo, (t, t + 1, t + 2), idx)
         phi, kap = U.triplet(t, L, lo)
-        u_keys, _, (u_phi, u_kap, u_c) = group(U.keys, phi.ravel(), kap.ravel(), u_coh.ravel())
-        u_res, u_n = zone_test(u_phi, u_kap, args.min_cells, args.alpha, args.backend)
+        u_keys, _, (u_phi, u_kap, u_c) = group(U.keys, phi.ravel(), kap.ravel(), u_coh.ravel(),
+                                               max_cells=args.max_cells)
         u_zcoh = np.nanmedian(u_c, -1)
         common, iu, is_ = np.intersect1d(u_keys, s_keys, return_indices=True)
+        n_min_u = args.min_cells
+        if args.match_enl:
+            u_phi, u_kap = match_enl(u_phi, u_kap, iu, s_n[is_], s1_looks / args.s1_area,
+                                     U.n_looks / args.uavsar_area, rng)
+            n_min_u = 2
+        u_res, u_n = zone_test(u_phi, u_kap, n_min_u, args.alpha, args.backend)
         s_zcoh = np.array([s1_coh.get(k, np.nan) for k in common])
         keep = ((u_zcoh[iu] >= args.coh_uavsar) & (s_zcoh >= args.coh_s1)
                 & np.isfinite(u_res["p"][iu]) & np.isfinite(s_res["p"][is_]))
@@ -409,6 +431,15 @@ if __name__ == "__main__":
     parser.add_argument("--period", nargs=2, default=["2016-07-01", "2017-11-30"])
     parser.add_argument("--max-dt", type=float, default=6.0)
     parser.add_argument("--pfa", type=float, default=0.01)
+    parser.add_argument("--match-enl", action="store_true",
+                        help="Subsample the UAVSAR cells of each zone to the equivalent number of "
+                             "looks of its Sentinel-1 cells (use with --uavsar-factor 1 1).")
+    parser.add_argument("--s1-area", type=float, default=2.04,
+                        help="Correlation area of a Sentinel-1 cell (run slc-spectrum-cslc-2d).")
+    parser.add_argument("--uavsar-area", type=float, default=4.04,
+                        help="Correlation area of a UAVSAR cell of --uavsar-factor base cells.")
+    parser.add_argument("--max-cells", type=int, default=64,
+                        help="Cells kept per UAVSAR zone before matching.")
     parser.add_argument("--alpha", type=float, default=0.05, help="Level of the confidence arcs.")
     parser.add_argument("--block-zones", type=int, default=10)
     parser.add_argument("--boot", type=int, default=500)
