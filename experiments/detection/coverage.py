@@ -49,6 +49,7 @@ from scipy import stats
 
 from closure_glrt import cli
 from closure_glrt.closure import neighbor_concentration, triplet_quantities
+from closure_glrt.competitors import YuanLUT, yuan_zone, zone_multilook, zwieback_zone
 from closure_glrt.glrt import (
     confidence_halfwidth,
     glrt,
@@ -65,7 +66,8 @@ from closure_glrt.simulation import (
 )
 
 logger = logging.getLogger(__name__)
-METHODS = ("scale_free", "scale_free_nb", "nominal", "plugin", "equal", "bootstrap")
+METHODS = ("scale_free", "scale_free_nb", "nominal", "plugin", "equal", "bootstrap", "zwieback",
+           "yuan")
 SCENARIOS = ("touching", "independent", "white", "texture", "mixed", "ramp", "split")
 
 
@@ -130,11 +132,12 @@ def bootstrap_halfwidth(phi, w, mu_hat, rng, n_boot, alpha):
     return hw
 
 
-def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L, zone):
+def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L, zone, lut=None, enl_zone=None):
     phi, kappa, _ = (x[..., 0] for x in triplet_quantities(lz, n_looks))
     knb = neighbor_concentration(lz, n_looks, zone)
     ok = np.isfinite(phi).all(-1) & np.isfinite(knb).all(-1) & (knb > 0).all(-1)
     phi, kappa, knb = phi[ok], kappa[ok], knb[ok]
+    pz, g12, g23, g13 = zone_multilook(lz[ok])
     eta, chi = threshold(L, args.pfa), stats.chi2.ppf(1 - args.pfa, 1)
     r = glrt(phi, kappa, details=True)
     ones = np.ones_like(kappa)
@@ -152,6 +155,11 @@ def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L, zone):
         "bootstrap": (np.full(len(phi), np.nan), mu_w,
                       bootstrap_halfwidth(phi, kappa, mu_w, rng, args.boot, args.alpha)),
     }
+    zw, zw_hw = zwieback_zone(pz, g12, g23, g13, n_looks * L, args.alpha)
+    res["zwieback"] = (zw > chi, pz, zw_hw)
+    if lut is not None:
+        yr, y_hw = yuan_zone(pz, g12, g23, g13, enl_zone, lut, args.alpha)
+        res["yuan"] = (yr > stats.norm.ppf(1 - args.pfa / 2), pz, y_hw)
     out = {}
     for m, (rej, mu, hw) in res.items():
         err = wrap(mu - mu_true)
@@ -167,7 +175,8 @@ def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L, zone):
 
 def main(args):
     rng = np.random.default_rng(args.seed)
-    run = start_run(args.task, cli.params(args), *cli.run_roots(args), [args.store, args.spectrum],
+    inputs = [args.store, args.spectrum] + ([args.yuan_lut] if args.yuan_lut else [])
+    run = start_run(args.task, cli.params(args), *cli.run_roots(args), inputs,
                     allow_dirty=args.allow_dirty)
     logging.getLogger().addHandler(logging.FileHandler(run.small_dir / "log.txt"))
     t0 = time.time()
@@ -184,6 +193,10 @@ def main(args):
     rows, summary = [], {"thresholds": {"scale_free": float(threshold(L, args.pfa)),
                                         "chi2_1": float(stats.chi2.ppf(1 - args.pfa, 1))}}
     spread = np.radians(args.spread)
+    lut = None
+    if args.yuan_lut is not None:
+        d = np.load(args.yuan_lut)
+        lut = YuanLUT(d["grid"], d["table"])
     for a, b in args.factors:
         window, n_looks = (a * br, b * bc), a * b * br * bc
         wname = f"{window[0]}x{window[1]}"
@@ -191,6 +204,9 @@ def main(args):
         A = correlation_area(np.outer(h_az, h_rg), window)
         c_eff = 1.0 / A
         summary[f"{wname}|correlation_area"] = A
+        A_zone = correlation_area(np.outer(h_az, h_rg), (zone[0] * window[0], zone[1] * window[1]))
+        enl_zone = L * n_looks / A_zone
+        summary[f"{wname}|zone_enl"] = enl_zone
         for lo, hi in zip(args.classes[:-1], args.classes[1:]):
             idx0 = np.flatnonzero((gbar >= lo) & (gbar < hi))
             if len(idx0) < 100:
@@ -205,13 +221,14 @@ def main(args):
                     continue
                 pick = rng.choice(idx, args.zones, replace=len(idx) < args.zones)
                 lz = simulate(g_all[pick], window, zone, rng, h_az, h_rg, cl, args.batch, args)
-                out = evaluate(lz, n_looks, c_eff, np.radians(mu_deg), args, rng, L, zone)
-                for m in METHODS:
+                out = evaluate(lz, n_looks, c_eff, np.radians(mu_deg), args, rng, L, zone, lut,
+                               enl_zone)
+                for m in [m for m in METHODS if m in out]:
                     rows.append({"scenario": args.scenario, "window": wname,
                                  "zone": f"{zone[0]}x{zone[1]}", "class": cname,
                                  "closure_deg": mu_deg, "method": m, **out[m]})
                 logger.info("%s class %s mu=%g: cov %s rej %s, %.1f min", wname, cname, mu_deg,
-                            {m: round(out[m]["coverage"], 3) for m in METHODS},
+                            {m: round(v["coverage"], 3) for m, v in out.items()},
                             round(out["scale_free"]["reject"], 4), (time.time() - t0) / 60)
     with open(run.small_dir / "coverage.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
@@ -235,6 +252,8 @@ if __name__ == "__main__":
                         help="Coherence factor of the second population (scenario mixed).")
     parser.add_argument("--spread", type=float, default=1.0,
                         help="Half-range of the closure within the zone, degrees (ramp, split).")
+    parser.add_argument("--yuan-lut", type=Path, default=None,
+                        help="yuan_lut.npz of experiments/stores/yuan_lut.py (adds the Yuan test).")
     parser.add_argument("--pol", default="VV")
     parser.add_argument("--triplet", type=int, default=10)
     parser.add_argument("--factors", type=int, nargs=2, action="append", default=None)

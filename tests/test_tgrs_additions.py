@@ -58,3 +58,25 @@ def test_neighbor_concentration_excludes_the_cell():
     k_hi = dezan_concentration(0.9, 0.9, 0.81, 75)
     assert np.median(k[:, 4]) > 0.5 * k_hi
     assert np.median(k[:, 4]) > np.median(k[:, 0])
+
+
+def test_yuan_lut_matches_dezan_at_high_coherence():
+    from closure_glrt.closure import dezan_closure_variance
+    from closure_glrt.competitors import YuanLUT, yuan_lut
+    grid, table = yuan_lut(np.random.default_rng(3), step=0.2, reps=256)
+    lut = YuanLUT(grid, table)
+    g = grid[-1]                                   # 0.9
+    sd = lut(g, g, g)
+    assert np.isclose(sd, np.sqrt(dezan_closure_variance(g, g, g, 2048)), rtol=0.15)
+
+
+def test_zone_multilook_closure_and_wald():
+    from closure_glrt.competitors import zone_multilook, zwieback_zone
+    rng = np.random.default_rng(4)
+    B, zone, window = 300, (5, 5), (15, 5)
+    g = np.full((B, 25), 0.9)
+    R = coherence_matrix(g, g, g * 0.95)
+    lz = simulate_zones(R, window, zone, rng)            # white speckle, H0
+    phi, g12, g23, g13 = zone_multilook(lz)
+    stat = zwieback_zone(phi, g12, g23, g13, 25 * 75)
+    assert abs(np.mean(stat > stats.chi2.ppf(0.95, 1)) - 0.05) < 0.04
