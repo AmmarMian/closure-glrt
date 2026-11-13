@@ -49,7 +49,12 @@ import zarr
 from scipy import special, stats
 
 from closure_glrt import cli
-from closure_glrt.closure import aggregate_cells, tile_zones, triplet_quantities
+from closure_glrt.closure import (
+    aggregate_cells,
+    neighbor_concentration,
+    tile_zones,
+    triplet_quantities,
+)
 from closure_glrt.directional import pit, wrap
 from closure_glrt.glrt import glrt
 from closure_glrt.provenance import finish_run, start_run
@@ -186,7 +191,12 @@ def main(args):
         h_rg = kernel_from_spectrum(sp["s_rg"], args.taps)
 
     def process(source, wname, t, Lz, n_looks):
-        phi, kappa, gmin, _ = zone_cells(Lz, n_looks)
+        phi, kappa, gmin, ok = zone_cells(Lz, n_looks)
+        if args.weights == "nb":    # precision of each cell from its neighbors in the zone
+            with np.errstate(all="ignore"):
+                kappa = neighbor_concentration(Lz[ok], n_looks, zone)
+            good = np.isfinite(kappa).all(-1) & (kappa > 0).all(-1)
+            phi, kappa, gmin = phi[good], kappa[good], gmin[good]
         d, c, z = fit_zones(phi, kappa)
         key = (source, wname, t)
         evaluate(writer, scores, key, d.ravel(), kappa.ravel(), c.ravel(), z.ravel(), gmin.ravel(),
@@ -243,6 +253,8 @@ if __name__ == "__main__":
     parser.add_argument("--sim-zones", type=int, default=20_000)
     parser.add_argument("--taps", type=int, default=8)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--weights", default="own", choices=["own", "nb"],
+                        help="Precisions of the cells: own coherences, or those of the neighbors.")
     cli.add_run_arguments(parser, task="closure-fit")
     args = parser.parse_args()
     args.factors = args.factors or [[1, 1], [2, 2]]
