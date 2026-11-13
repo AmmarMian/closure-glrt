@@ -86,29 +86,40 @@ def triplet_zones(La, t, zone, n_looks, backend, extra=None):
             out["gbar_indep"][ok] = np.nanmedian(zi[ok], -1)
         if extra is not None:
             _extra_fields(out, ok, zp[ok], zk[ok], tile_zones(La[:, :, t:t + 3], zone)[ok],
-                          zone, n_looks, L, extra)
+                          zone, n_looks, L, extra, backend)
     return out
 
 
-def _extra_fields(out, ok, phi, kappa, lz, zone, n_looks, L, extra):
-    """Neighbor-weighted test and arc, arcs, nominal / equal-weights / Zwieback / Yuan statistics."""
+def _extra_fields(out, ok, phi, kappa, lz, zone, n_looks, L, extra, backend="numpy"):
+    """Neighbor-weighted test and arc, arcs, nominal / equal-weights / Zwieback / Yuan statistics.
+
+    The GLRTs and the arcs run on ``backend``; the zone multilook and the Yuan table on the host.
+    """
     alpha = extra["alpha"]
+
+    def dev(x):
+        return get_data_on_device(np.ascontiguousarray(x), backend)
+
     with np.errstate(all="ignore"):
         knb = neighbor_concentration(lz, n_looks, zone)
     good = np.isfinite(knb).all(-1) & (knb > 0).all(-1)
     sub = np.zeros(ok.shape, bool)
     sub[ok] = good
-    rn = glrt(phi[good], knb[good], details=True)
-    out["lam_nb"][sub] = rn["lam"]
-    out["p_nb"][sub] = pvalue(rn["lam"], L)
-    out["mu_nb"][sub] = rn["mu"]
-    out["hw_nb"][sub] = confidence_halfwidth(phi[good], knb[good], alpha)
-    out["hw"][ok] = confidence_halfwidth(phi, kappa, alpha)
-    out["lam_nominal"][ok] = glrt_known_scale(phi, kappa, 1.0)
-    re = glrt(phi, np.ones_like(kappa), details=True)
-    out["lam_equal"][ok] = re["lam"]
-    out["p_equal"][ok] = pvalue(re["lam"], L)
-    out["mu_equal"][ok] = re["mu"]
+    pd, kd, nd = dev(phi), dev(kappa), dev(knb[good])
+    pg = dev(phi[good])
+    rn = glrt(pg, nd, backend, details=True)
+    lam_nb = to_numpy(rn["lam"]).astype(np.float64)
+    out["lam_nb"][sub] = lam_nb
+    out["p_nb"][sub] = pvalue(lam_nb, L)
+    out["mu_nb"][sub] = to_numpy(rn["mu"])
+    out["hw_nb"][sub] = to_numpy(confidence_halfwidth(pg, nd, alpha, backend))
+    out["hw"][ok] = to_numpy(confidence_halfwidth(pd, kd, alpha, backend))
+    out["lam_nominal"][ok] = to_numpy(glrt_known_scale(pd, kd, 1.0, backend))
+    re = glrt(pd, dev(np.ones_like(kappa)), backend, details=True)
+    lam_eq = to_numpy(re["lam"]).astype(np.float64)
+    out["lam_equal"][ok] = lam_eq
+    out["p_equal"][ok] = pvalue(lam_eq, L)
+    out["mu_equal"][ok] = to_numpy(re["mu"])
     pz, g12, g23, g13 = zone_multilook(lz)
     out["mu_zone"][ok] = pz
     out["zw"][ok] = zwieback_zone(pz, g12, g23, g13, n_looks * L)
