@@ -15,10 +15,12 @@ import argparse
 import csv
 from pathlib import Path
 
-NAMES = {"scale_free": "Scale-free, own precisions", "scale_free_nb": "Scale-free, neighbor prec.",
+NAMES = {"scale_free": "Scale-free, own precisions",
+         "scale_free_nb": "Scale-free, neighbor prec.",
          "nominal": "Nominal looks", "plugin": "Plug-in ENL", "equal": "Equal weights",
          "bootstrap": "Bootstrap", "zwieback": "Zwieback (zone)", "yuan": "Yuan (zone)"}
-SCEN = [("touching", "5x5", "reference (touching cells)"), ("independent", "5x5", "independent cells"),
+SCEN = [("touching", "5x5", "reference (touching cells)"),
+        ("independent", "5x5", "independent cells"),
         ("white", "5x5", "independent pixels"), ("texture1", "5x5", r"texture $\nu=1$"),
         ("texture4", "5x5", r"texture $\nu=4$"), ("texture20", "5x5", r"texture $\nu=20$"),
         ("mixed", "5x5", "coherence halved on half of each cell"),
@@ -49,7 +51,8 @@ def coverage_table(rows, window):
            if r["window"] == window}
     classes = ("0.5-0.7", "0.7-0.9", "0.9-1.01")
     out = [r"\begin{tabular}{@{}l" + "rrr" * 3 + r"@{}}", r"\toprule",
-           r" & \multicolumn{3}{c}{$0.5\le\bar\gamma<0.7$} & \multicolumn{3}{c}{$0.7\le\bar\gamma<0.9$}"
+           r" & \multicolumn{3}{c}{$0.5\le\bar\gamma<0.7$}"
+           r" & \multicolumn{3}{c}{$0.7\le\bar\gamma<0.9$}"
            r" & \multicolumn{3}{c}{$\bar\gamma\ge0.9$} \\",
            r"$\mu$ (deg) & 0 & 2 & 5 & 0 & 2 & 5 & 0 & 2 & 5 \\", r"\midrule"]
     for what, fmt, title in (("coverage", pct, "Coverage (\\%)"),
@@ -71,7 +74,8 @@ def coverage_table(rows, window):
 
 def robustness_table(by_key, window):
     out = [r"\begin{tabular}{@{}lrrrrr@{}}", r"\toprule",
-           r"Scenario & \multicolumn{2}{c}{False alarm (\%)} & Power (\%) & Coverage (\%) & Bias \\",
+           r"Scenario & \multicolumn{2}{c}{False alarm (\%)} & Power (\%) & Coverage (\%)"
+           r" & Bias \\",
            r" & $\bar\gamma\ge0.2$ & $\bar\gamma<0.2$ & $2^\circ$ & $2^\circ$ & $2^\circ$ (deg) \\",
            r"\midrule"]
     for k, zone, label in SCEN:

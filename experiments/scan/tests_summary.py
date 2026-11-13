@@ -37,7 +37,6 @@ def main(args):
     run = start_run(args.task, cli.params(args), *cli.run_roots(args), [small / "manifest.json"],
                     allow_dirty=args.allow_dirty)
     logging.getLogger().addHandler(logging.FileHandler(run.small_dir / "log.txt"))
-    L = int(np.prod(zones.attrs["zone"]))
     chi = stats.chi2.ppf(1 - args.pfa, 1)
     z = stats.norm.ppf(1 - args.pfa / 2)
     triplets = list(zones.attrs["triplets"])
