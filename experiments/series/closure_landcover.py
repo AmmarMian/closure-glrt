@@ -115,7 +115,7 @@ def main(args):
             cls = stats.mode(px, axis=1, nan_policy="omit").mode.astype(float)
             cdl_cache[year] = (cls, (px == cls[:, None]).mean(1))
         cls, purity = cdl_cache[year]
-        mu, p, gbar = (np.asarray(g[f][k]).ravel() for f in ("mu", "p", args.class_def))
+        mu, p, gbar = (np.asarray(g[f][k]).ravel() for f in (args.mu_field, "p", args.class_def))
         keep = np.isfinite(mu) & (gbar >= args.coh) & (purity >= args.purity)
         for c in np.unique(cls[keep]):
             sel = keep & (cls == c)
@@ -126,6 +126,7 @@ def main(args):
             rows.append({"triplet": t, "dates": "/".join(str(d) for d in dates[t:t + 3]),
                          "cdl": int(c), "class": CDL.get(int(c), f"class {int(c)}"), "zones": n,
                          "mu_circmean_deg": circmean_deg(mu[sel]),
+                         "mu_median_deg": float(np.degrees(np.median(mu[sel]))),
                          "share_detected": float(det.sum() / n),
                          "frac_detected_pos": float((det & (mu > 0)).sum() / n),
                          "frac_detected_neg": float((det & (mu < 0)).sum() / n)})
@@ -142,6 +143,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--scan-run", required=True, help="Run directory of zone_scan.py.")
+    parser.add_argument("--mu-field", default="mu", choices=["mu", "mu_nb", "mu_equal"],
+                        help="Estimate of the closure of a zone (mu_nb: neighbor precisions).")
     parser.add_argument("--zones", type=Path, default=None,
                         help="zones.zarr (default: the large dir of --scan-run).")
     parser.add_argument("--llh", type=Path, required=True, help="2x8 .llh of the segment.")
