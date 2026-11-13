@@ -19,14 +19,12 @@ NAMES = {"scale_free": "Scale-free, own precisions",
          "scale_free_nb": "Scale-free, neighbor prec.",
          "nominal": "Nominal looks", "plugin": "Plug-in ENL", "equal": "Equal weights",
          "bootstrap": "Bootstrap", "zwieback": "Zwieback (zone)", "yuan": "Yuan (zone)"}
-SCEN = [("touching", "5x5", "reference (touching cells)"),
-        ("independent", "5x5", "independent cells"),
-        ("white", "5x5", "independent pixels"), ("texture1", "5x5", r"texture $\nu=1$"),
-        ("texture4", "5x5", r"texture $\nu=4$"), ("texture20", "5x5", r"texture $\nu=20$"),
-        ("mixed", "5x5", "coherence halved on half of each cell"),
-        ("ramp", "5x5", r"closure ramp $\pm1^\circ$ in the zone"),
-        ("split", "5x5", r"zone split $\pm1^\circ$"), ("split3", "5x5", r"zone split $\pm3^\circ$"),
-        ("zone3", "3x3", r"zones of $3\times3$ cells"), ("zone7", "7x7", r"zones of $7\times7$ cells")]
+SCEN = [("touching", "5x5", "Reference"), ("independent", "5x5", "Indep. cells"),
+        ("white", "5x5", "Indep. pixels"), ("texture1", "5x5", r"Texture $\nu=1$"),
+        ("texture4", "5x5", r"Texture $\nu=4$"), ("texture20", "5x5", r"Texture $\nu=20$"),
+        ("mixed", "5x5", "Mixed coh."), ("ramp", "5x5", r"Ramp $\pm1^\circ$"),
+        ("split", "5x5", r"Split $\pm1^\circ$"), ("split3", "5x5", r"Split $\pm3^\circ$"),
+        ("zone3", "3x3", r"$3\times3$ zones"), ("zone7", "7x7", r"$7\times7$ zones")]
 
 
 def read(run):
@@ -74,9 +72,8 @@ def coverage_table(rows, window):
 
 def robustness_table(by_key, window):
     out = [r"\begin{tabular}{@{}lrrrrr@{}}", r"\toprule",
-           r"Scenario & \multicolumn{2}{c}{False alarm (\%)} & Power (\%) & Coverage (\%)"
-           r" & Bias \\",
-           r" & $\bar\gamma\ge0.2$ & $\bar\gamma<0.2$ & $2^\circ$ & $2^\circ$ & $2^\circ$ (deg) \\",
+           r" & \multicolumn{2}{c}{Rej. at $\mu=0$ (\%)} & Pow. & Cov. & Bias \\",
+           r" & $\bar\gamma\ge0.2$ & $<0.2$ & (\%) & (\%) & (deg) \\",
            r"\midrule"]
     for k, zone, label in SCEN:
         rows = by_key.get(k)
@@ -100,11 +97,36 @@ def robustness_table(by_key, window):
     return "\n".join(out)
 
 
+def compact_table(rows, window, mu=2.0):
+    """Coverage and median half-width at one closure, per method and class (one column)."""
+    sel = {(r["method"], r["class"]): r for r in rows
+           if r["window"] == window and float(r["closure_deg"]) == mu}
+    classes = ("0.5-0.7", "0.7-0.9", "0.9-1.01")
+    out = [r"\begin{tabular}{@{}lrrrrrr@{}}", r"\toprule",
+           r" & \multicolumn{2}{c}{$0.5\le\bar\gamma<0.7$} & \multicolumn{2}{c}{$0.7\le\bar\gamma<0.9$}"
+           r" & \multicolumn{2}{c}{$\bar\gamma\ge0.9$} \\",
+           r"Method & cov. & $h$ & cov. & $h$ & cov. & $h$ \\", r"\midrule"]
+    short = {"scale_free": "Scale-free, own", "scale_free_nb": "Scale-free, neighbors",
+             "nominal": "Nominal looks", "plugin": "Plug-in ENL", "equal": "Equal weights",
+             "bootstrap": "Bootstrap", "zwieback": "Zwieback", "yuan": "Yuan"}
+    for m, name in short.items():
+        cells = []
+        for c in classes:
+            r = sel.get((m, c))
+            cells += [pct(r["coverage"]), f"{float(r['median_halfwidth_deg']):.2f}"] if r \
+                else ["--", "--"]
+        out.append(f"{name} & " + " & ".join(cells) + r" \\")
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out)
+
+
 def main(args):
     by_key = {key_of(r): read(r) for r in args.runs}
     args.out.mkdir(parents=True, exist_ok=True)
     cov_rows = by_key.get("touching", []) + by_key.get("competitors", [])
     (args.out / f"coverage_{args.window}.tex").write_text(coverage_table(cov_rows, args.window))
+    (args.out / f"coverage_compact_{args.window}.tex").write_text(compact_table(cov_rows,
+                                                                                args.window))
     (args.out / f"robustness_{args.window}.tex").write_text(robustness_table(by_key, args.window))
 
 
