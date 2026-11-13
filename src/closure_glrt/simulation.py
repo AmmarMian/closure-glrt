@@ -166,7 +166,8 @@ def _separable_speckle(rng, n, shape, h_az, h_rg):
     return sum(h_rg[j] * x[:, :, :, j:j + W] for j in range(kr))
 
 
-def simulate_zones(R, window, zone, rng, h_az=None, h_rg=None, closure=0.0):
+def simulate_zones(R, window, zone, rng, h_az=None, h_rg=None, closure=0.0, texture=None,
+                   R_alt=None):
     r"""Lagged cell covariances of whole zones of adjacent cells, as in the scan store.
 
     Parameters
@@ -175,7 +176,13 @@ def simulate_zones(R, window, zone, rng, h_az=None, h_rg=None, closure=0.0):
         (e.g. built from the sample coherences of real cells with :func:`coherence_matrix`).
     window : (r, c) pixels per cell; zone : (z_a, z_b) cells per zone.
     rng : numpy Generator. h_az, h_rg : kernels of :func:`kernel_from_spectrum` (None: white).
-    closure : true closure (rad) put on entry (1, 2) of every cell.
+    closure : true closure (rad) put on entry (1, 2), a scalar or an array broadcastable to
+        ``(B, L)`` (one closure per cell).
+    texture : None or float ``nu``: Gamma texture of shape ``nu`` and mean 1 per pixel, common to
+        the three dates (K-distributed amplitude), see :func:`simulate_cells`.
+    R_alt : None or array (B, L, 3, 3): coherence matrices of a second pixel population, used
+        on the right half of the columns of every cell (coherence varying within the cell);
+        the closure is applied to it too.
 
     One field per zone and date is filtered, then cut into the cells, so neighbouring cells
     share correlated pixels as on the image; the looks of each cell are mixed over the dates by
@@ -191,9 +198,20 @@ def simulate_zones(R, window, zone, rng, h_az=None, h_rg=None, closure=0.0):
     h_rg = np.ones(1) if h_rg is None else np.asarray(h_rg)
     x = _separable_speckle(rng, B, (za * r, zb * c), h_az, h_rg)          # (B, 3, za r, zb c)
     x = x.reshape(B, 3, za, r, zb, c).transpose(0, 2, 4, 1, 3, 5).reshape(B, L, 3, r * c)
-    R[..., 0, 1] *= np.exp(1j * closure)
-    R[..., 1, 0] *= np.exp(-1j * closure)
+    rot = np.exp(1j * np.broadcast_to(np.asarray(closure, dtype=np.float64), (B, L)))
+    R[..., 0, 1] *= rot
+    R[..., 1, 0] *= rot.conj()
     z = np.linalg.cholesky(R) @ x                                           # (B, L, 3, N)
+    if R_alt is not None:
+        Ra = np.asarray(R_alt, dtype=np.complex128).copy()
+        Ra[..., 0, 1] *= rot
+        Ra[..., 1, 0] *= rot.conj()
+        right = (np.arange(r * c) % c) >= c // 2
+        z[..., right] = np.linalg.cholesky(Ra) @ x[..., right]
+    if texture is not None:
+        tau = _draw_texture(rng, texture, (B, za * r, zb * c))
+        tau = tau.reshape(B, za, r, zb, c).transpose(0, 1, 3, 2, 4).reshape(B, L, 1, r * c)
+        z = z * np.sqrt(tau)
     S = z @ np.swapaxes(z.conj(), -1, -2) / (r * c)
     out = np.full((B, L, 3, 3), np.nan + 0j)
     for t in range(3):

@@ -54,6 +54,7 @@ __all__ = [
     "threshold",
     "glrt_known_scale",
     "confidence_halfwidth",
+    "known_scale_halfwidth",
     "ScaleFreeClosureGLRT",
 ]
 
@@ -224,6 +225,22 @@ def confidence_halfwidth(phi: Array, weights: Array, alpha: float = 0.05,
     delta = be.where(delta < 2, delta, 2 * be.ones_like(delta))
     h = 2 * be.arcsin(be.sqrt(delta / 2))
     return be.where(target <= 0, be.full_like(h, np.pi), h)
+
+
+def known_scale_halfwidth(phi: Array, weights: Array, scale: float = 1.0, alpha: float = 0.05,
+                          backend_name: Union[str, Backend] = "numpy") -> Array:
+    r"""Half-width of the $1-\alpha$ arc obtained by inverting :func:`glrt_known_scale`.
+
+    Testing $\mu_0$ gives $2cR(1-\cos(\hat\mu-\mu_0))\le\chi^2_{1,1-\alpha}$, hence
+    $1-\cos h=\chi^2_{1,1-\alpha}/(2cR)$, and $h=\pi$ when this exceeds 2.
+    """
+    be = get_backend_module(backend_name)
+    w = be.broadcast_to(weights, phi.shape)
+    _, _, _, R, _ = _deficits(phi, w, backend_name)
+    q = float(stats.chi2.ppf(1 - alpha, 1))
+    delta = q / (2 * scale * R)
+    delta = be.where(delta < 2, delta, 2 * be.ones_like(delta))
+    return 2 * be.arcsin(be.sqrt(delta / 2))
 
 
 class ScaleFreeClosureGLRT(Detector):
