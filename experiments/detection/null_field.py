@@ -104,10 +104,10 @@ def main(args):
     h_az, h_rg = (kernel_from_spectrum(sp["s_az"], args.taps),
                   kernel_from_spectrum(sp["s_rg"], args.taps))
     # pick the strip: the azimuth window of zones with the most coherent zones
-    I, J = lags_all.shape[:2]
+    n_rows, J = lags_all.shape[:2]
     gmin_rows = []
     step = za * args.zones_az
-    for i0 in range(0, I - step + 1, step):
+    for i0 in range(0, n_rows - step + 1, step):
         lg = np.asarray(lags_all[i0:i0 + step, :, t:t + 3], dtype=np.complex128)
         g = cell_coherences(lg).min(-1)
         gmin_rows.append((float(np.nanmean(g >= args.coh)), i0))
