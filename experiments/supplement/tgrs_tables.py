@@ -80,15 +80,15 @@ def robustness_table(by_key, window):
         if not rows:
             continue
         rows = [r for r in rows if r["window"] == window]
-        pf = [float(r["reject"]) for r in rows if r["method"] == "scale_free_nb"
+        pf = [float(r["reject"]) for r in rows if r["method"] == "scale_free"
               and float(r["closure_deg"]) == 0 and r["class"] not in ("0-0.2",)]
-        pf0 = [float(r["reject"]) for r in rows if r["method"] == "scale_free_nb"
+        pf0 = [float(r["reject"]) for r in rows if r["method"] == "scale_free"
                and float(r["closure_deg"]) == 0 and r["class"] == "0-0.2"]
         h1 = {r["method"]: r for r in rows if float(r["closure_deg"]) == 2
               and r["class"] == "0.7-0.9"}
         cells = [f"{100 * min(pf):.1f}--{100 * max(pf):.1f}" if pf else "--",
                  pct(pf0[0]) if pf0 else "--",
-                 pct(h1["scale_free_nb"]["reject"]) if "scale_free_nb" in h1 else "--",
+                 pct(h1["scale_free"]["reject"]) if "scale_free" in h1 else "--",
                  pct(h1["scale_free_nb"]["coverage"]) if "scale_free_nb" in h1 else "--",
                  f"{float(h1['scale_free_nb']['mean_error_deg']):+.2f}"
                  if "scale_free_nb" in h1 else "--"]

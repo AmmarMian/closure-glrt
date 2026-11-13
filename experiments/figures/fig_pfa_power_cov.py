@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from style import COLUMN, GRID, INK, MUTED, S1, SAMEDAY, UAVSAR, panel_label, style
 
-TESTS = {"scale_free_nb": ("scale-free (neighbors)", UAVSAR, "o", "-"),
-         "scale_free": ("scale-free (own)", UAVSAR, "o", "--"),
+TESTS = {"scale_free": ("scale-free (proposed, own)", UAVSAR, "o", "-"),
+         "scale_free_nb": ("scale-free (neighbors)", UAVSAR, "o", "--"),
          "equal": ("equal weights", MUTED, "^", "-"),
          "plugin": ("plug-in ENL", SAMEDAY, "D", "-"),
          "nominal": ("nominal looks", S1, "s", ":"),
@@ -43,10 +43,10 @@ def main(args):
         y = [next((float(r["reject"]) for r in comp if r["method"] == m and r["class"] == c
                    and float(r["closure_deg"]) == 0), np.nan) for c in CLASSES]
         a.plot(x, y, color=col, marker=mk, ls=ls, lw=0.9, ms=3, label=lab)
-    y = [next((float(r["reject"]) for r in white if r["method"] == "scale_free_nb"
+    y = [next((float(r["reject"]) for r in white if r["method"] == "scale_free"
                and r["class"] == c and float(r["closure_deg"]) == 0), np.nan) for c in CLASSES]
     a.plot(x, y, color=UAVSAR, marker="o", mfc="white", ls="none", ms=3.5,
-           label="scale-free (neighbors), indep. pixels")
+           label="scale-free (own), indep. pixels")
     n = 2000
     band = 2 * np.sqrt(args.pfa * (1 - args.pfa) / n)
     a.axhspan(args.pfa - band, args.pfa + band, color=GRID, lw=0)
@@ -60,7 +60,7 @@ def main(args):
              bbox_to_anchor=(0.5, -0.32))
     panel_label(a, "(a)", corner="right")
     closures = sorted({float(r["closure_deg"]) for r in comp})
-    for m in ("scale_free_nb", "scale_free", "equal", "plugin"):
+    for m in ("scale_free", "scale_free_nb", "equal", "plugin"):
         lab, col, mk, ls = TESTS[m]
         pts = [(mu, float(r["reject"])) for mu in closures for r in comp
                if r["method"] == m and r["class"] == args.power_class
