@@ -18,6 +18,8 @@ scattering in SAR interferometry", IEEE TGRS 53(12):6608-6616, 2015.
 import math
 from typing import Union
 
+import numpy as np
+
 from closure_glrt.backend import Array, Backend, concatenate, get_backend_module
 
 __all__ = [
@@ -167,3 +169,33 @@ def tile_zones(x: Array, zone: tuple[int, int], backend_name: Union[str, Backend
     y = x[: I * za, : J * zb].reshape(I, za, J, zb, *x.shape[2:])
     y = be.swapaxes(y, 1, 2)
     return y.reshape(I, J, za * zb, *x.shape[2:])
+
+
+def neighbor_concentration(lags, n_looks: int, zone: tuple[int, int]) -> np.ndarray:
+    r"""Precision of every cell from the coherences of its neighbors in the zone (numpy).
+
+    ``lags`` ``(..., L, 3, 3)`` (one triplet, scan layout, cells of a zone in row-major order of
+    ``zone``). The three sample coherence magnitudes of each cell are replaced by their mean over
+    the (up to 8) adjacent cells of the zone, the cell itself excluded, before De Zan's precision
+    is computed. The weights then do not depend on the speckle of the cell, whose closure they
+    weight, which removes the bias of the weighted mean towards 0 when the closure is not 0.
+    """
+    lags = np.asarray(lags)
+    P = lags[..., 0].real
+    g = np.stack([np.abs(lags[..., 0, 1]) / np.sqrt(P[..., 0] * P[..., 1]),
+                  np.abs(lags[..., 1, 1]) / np.sqrt(P[..., 1] * P[..., 2]),
+                  np.abs(lags[..., 0, 2]) / np.sqrt(P[..., 0] * P[..., 2])], -1)   # (..., L, 3)
+    za, zb = zone
+    grid = g.reshape(g.shape[:-2] + (za, zb, 3))
+    pad = np.pad(grid, [(0, 0)] * (grid.ndim - 3) + [(1, 1), (1, 1), (0, 0)])
+    one = np.pad(np.ones((za, zb)), 1)
+    tot = np.zeros_like(grid)
+    cnt = np.zeros((za, zb))
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            if di == 0 and dj == 0:
+                continue
+            tot += pad[..., 1 + di:1 + di + za, 1 + dj:1 + dj + zb, :]
+            cnt += one[1 + di:1 + di + za, 1 + dj:1 + dj + zb]
+    gn = (tot / cnt[..., None]).reshape(g.shape)
+    return dezan_concentration(gn[..., 0], gn[..., 1], gn[..., 2], n_looks)

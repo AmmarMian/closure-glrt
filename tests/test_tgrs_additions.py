@@ -42,3 +42,19 @@ def test_simulate_zones_closure_per_cell_and_options():
     g = np.abs(lz[..., 0, 1]) / np.sqrt(lz[..., 0, 0].real * lz[..., 1, 0].real)
     assert 0.5 < np.median(g) < 0.8
     assert np.allclose(np.degrees(np.median(_closure_of(lz, 400), 0)), [5, -5], atol=2.0)
+
+
+def test_neighbor_concentration_excludes_the_cell():
+    from closure_glrt.closure import dezan_concentration, neighbor_concentration
+    rng = np.random.default_rng(2)
+    B, zone, window = 50, (3, 3), (15, 5)
+    g = np.full((B, 9), 0.9)
+    g[:, 4] = 0.5                         # centre cell less coherent
+    R = coherence_matrix(g, g, g * g)
+    lz = simulate_zones(R, window, zone, rng)
+    k = neighbor_concentration(lz, 75, zone)
+    assert k.shape == (B, 9)
+    # the centre cell sees only its coherent neighbours, corners see the incoherent centre
+    k_hi = dezan_concentration(0.9, 0.9, 0.81, 75)
+    assert np.median(k[:, 4]) > 0.5 * k_hi
+    assert np.median(k[:, 4]) > np.median(k[:, 0])

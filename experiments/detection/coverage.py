@@ -48,7 +48,7 @@ from pfa_power import real_zones  # same directory
 from scipy import stats
 
 from closure_glrt import cli
-from closure_glrt.closure import triplet_quantities
+from closure_glrt.closure import neighbor_concentration, triplet_quantities
 from closure_glrt.glrt import (
     confidence_halfwidth,
     glrt,
@@ -65,7 +65,7 @@ from closure_glrt.simulation import (
 )
 
 logger = logging.getLogger(__name__)
-METHODS = ("scale_free", "nominal", "plugin", "equal", "bootstrap")
+METHODS = ("scale_free", "scale_free_nb", "nominal", "plugin", "equal", "bootstrap")
 SCENARIOS = ("touching", "independent", "white", "texture", "mixed", "ramp", "split")
 
 
@@ -130,17 +130,20 @@ def bootstrap_halfwidth(phi, w, mu_hat, rng, n_boot, alpha):
     return hw
 
 
-def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L):
+def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L, zone):
     phi, kappa, _ = (x[..., 0] for x in triplet_quantities(lz, n_looks))
-    ok = np.isfinite(phi).all(-1)
-    phi, kappa = phi[ok], kappa[ok]
+    knb = neighbor_concentration(lz, n_looks, zone)
+    ok = np.isfinite(phi).all(-1) & np.isfinite(knb).all(-1) & (knb > 0).all(-1)
+    phi, kappa, knb = phi[ok], kappa[ok], knb[ok]
     eta, chi = threshold(L, args.pfa), stats.chi2.ppf(1 - args.pfa, 1)
     r = glrt(phi, kappa, details=True)
     ones = np.ones_like(kappa)
     re = glrt(phi, ones, details=True)
+    rn = glrt(phi, knb, details=True)
     mu_w, mu_e = r["mu"], re["mu"]
     res = {
         "scale_free": (r["lam"] > eta, mu_w, confidence_halfwidth(phi, kappa, args.alpha)),
+        "scale_free_nb": (rn["lam"] > eta, rn["mu"], confidence_halfwidth(phi, knb, args.alpha)),
         "nominal": (glrt_known_scale(phi, kappa, 1.0) > chi, mu_w,
                     known_scale_halfwidth(phi, kappa, 1.0, args.alpha)),
         "plugin": (glrt_known_scale(phi, kappa, c_eff) > chi, mu_w,
@@ -202,7 +205,7 @@ def main(args):
                     continue
                 pick = rng.choice(idx, args.zones, replace=len(idx) < args.zones)
                 lz = simulate(g_all[pick], window, zone, rng, h_az, h_rg, cl, args.batch, args)
-                out = evaluate(lz, n_looks, c_eff, np.radians(mu_deg), args, rng, L)
+                out = evaluate(lz, n_looks, c_eff, np.radians(mu_deg), args, rng, L, zone)
                 for m in METHODS:
                     rows.append({"scenario": args.scenario, "window": wname,
                                  "zone": f"{zone[0]}x{zone[1]}", "class": cname,
