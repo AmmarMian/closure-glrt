@@ -10,7 +10,9 @@ $d_\ell=\operatorname{wrap}(\hat\Phi_\ell-\hat\mu)$ of all zones are then on a c
 * standardized residuals $z_\ell=d_\ell\sqrt{\hat c\,\kappa_{0,\ell}}$ and probability integral
   transforms $u_\ell=F(d_\ell)$ under three laws: ``vm_c`` $\mathcal{VM}(0,\hat c\kappa_{0,\ell})$
   (the model), ``vm_1`` $\mathcal{VM}(0,\kappa_{0,\ell})$ (scale one, nominal looks), ``wn_c``
-  wrapped normal of variance $1/(\hat c\kappa_{0,\ell})$ (another shape, same scale). Per class
+  wrapped normal of variance $1/(\hat c\kappa_{0,\ell})$ (another shape, same scale), and
+  ``vm_free`` $\mathcal{VM}(0,\hat\kappa)$, one free concentration per zone fitted with equal
+  weights, i.e. the classical von Mises model that ignores the precisions of the cells. Per class
   of the cell's weakest coherence: KS distance of $u$ to the uniform law, and with
   $s=\Phi^{-1}(u)$ the mean of $s^2$ (1), $P(|s|>2)$ (0.0455) and $P(|s|>3)$ (0.0027);
 * precision against $\kappa_{0,\ell}$: cells binned by $\kappa_{0,\ell}$; in each bin the
@@ -27,6 +29,11 @@ $\hat\mu$ and $\hat c$ are fitted on the same cells, which pulls the residuals i
 conditions (``--spectrum``: measured speckle spectrum, coherences of the real cells of the same
 triplet, adjacent cells of one filtered field, closure 0), which is the reference: real data fit
 the model as well as the model fits itself if the two agree.
+
+``--s1-triplets`` adds Sentinel-1 (source ``sentinel1``): the cell covariances of the chosen
+groups of the CSLC triplet store (``experiments/stores/cslc_triplets.py``) are tiled into zones of
+``--zone`` cells on the grid of each burst, and ``--s1-spectrum`` (the 1-D spectra of
+``slc_spectrum.py --cslc``) gives its simulated reference (source ``sim_h0_s1``).
 
 Outputs (run directory): ``fit.csv`` (one row per source, window, triplet, class and law),
 ``profiles.npz`` (precision profiles), ``scores.npz`` (normal-score quantiles at ``probs`` and
@@ -61,7 +68,7 @@ from closure_glrt.provenance import finish_run, start_run
 from closure_glrt.simulation import coherence_matrix, kernel_from_spectrum, simulate_zones
 
 logger = logging.getLogger(__name__)
-LAWS = ("vm_c", "vm_1", "wn_c")
+LAWS = ("vm_c", "vm_1", "wn_c", "vm_free")
 PROBS = np.concatenate([[1e-4, 3e-4, 1e-3, 3e-3], np.linspace(0.01, 0.99, 99),
                         [0.997, 0.999, 0.9997, 0.9999]])
 Z_EDGES = np.linspace(-6, 6, 121)
@@ -112,14 +119,17 @@ def abs_quantile(kappa, level=0.95):
     return (lo + hi) / 2
 
 
-def precision_profile(d, kappa, c, n_bins=24, min_cells=2000, model_cells=3000, rng=None):
+def precision_profile(d, kappa, c, d_free, k_free, n_bins=24, min_cells=2000, model_cells=3000,
+                       rng=None):
     """Bins of log kappa0: median kappa0, n, concentration of d / median kappa0, and the 95 %
-    quantile of |d|: empirical, under the model VM(0, c kappa0) and under VM(0, kappa0)."""
+    quantile of |d|: empirical, under the model VM(0, c kappa0) and under VM(0, kappa0); and the
+    same empirical and predicted quantiles for the free model (residuals d_free, VM(0, k_free))."""
     lk = np.log10(kappa)
     edges = np.quantile(lk, np.linspace(0.0005, 0.9995, n_bins + 1))
     idx = np.digitize(lk, edges) - 1
     rng = rng or np.random.default_rng(0)
-    out = {k: [] for k in ("kappa0", "scale", "n", "q95", "q95_model", "q95_nominal")}
+    out = {k: [] for k in ("kappa0", "scale", "n", "q95", "q95_model", "q95_nominal",
+                           "q95_free", "q95_free_model")}
     for b in range(n_bins):
         sel = np.flatnonzero(idx == b)
         if len(sel) < min_cells:
@@ -132,10 +142,12 @@ def precision_profile(d, kappa, c, n_bins=24, min_cells=2000, model_cells=3000, 
         out["q95"].append(float(np.quantile(np.abs(d[sel]), 0.95)))
         out["q95_model"].append(abs_quantile(c[sub] * kappa[sub]))
         out["q95_nominal"].append(abs_quantile(kappa[sub]))
+        out["q95_free"].append(float(np.quantile(np.abs(d_free[sel]), 0.95)))
+        out["q95_free_model"].append(abs_quantile(k_free[sub]))
     return {k: np.array(v) for k, v in out.items()}
 
 
-def evaluate(writer, scores, key, d, kappa, c, z, gmin, classes, max_cells, rng):
+def evaluate(writer, scores, key, d, kappa, c, z, gmin, d_free, k_free, classes, max_cells, rng):
     base = "|".join(map(str, key))
     bounds = list(zip(classes[:-1], classes[1:])) + [(classes[0], classes[-1] + 1e-9)]
     for lo, hi in bounds:
@@ -147,16 +159,33 @@ def evaluate(writer, scores, key, d, kappa, c, z, gmin, classes, max_cells, rng)
         cl = f"{lo:g}-{hi:g}" if hi <= classes[-1] else "all"
         scores[f"{base}|{cl}|z_hist"] = np.histogram(z[sel], Z_EDGES, density=True)[0]
         for law in LAWS:
-            u = np.clip(pit(d[sel], kappa[sel], c[sel], law), 1e-12, 1 - 1e-12)
+            if law == "vm_free":
+                u = pit(d_free[sel], k_free[sel], 1.0, "vm_c")
+            else:
+                u = pit(d[sel], kappa[sel], c[sel], law)
+            u = np.clip(u, 1e-12, 1 - 1e-12)
             s = stats.norm.ppf(u)
             writer.writerow({
                 "source": key[0], "window": key[1], "triplet": key[2], "class": cl,
-                "cells": len(sel), "law": law, "median_c": float(np.median(c[sel])),
+                "cells": len(sel), "law": law,
+                "median_c": float(np.median((k_free if law == "vm_free" else c)[sel])),
                 "ks": float(stats.kstest(u, "uniform").statistic),
                 "mean_s2": float((s**2).mean()), "p_abs_gt2": float((np.abs(s) > 2).mean()),
                 "p_abs_gt3": float((np.abs(s) > 3).mean())})
             scores[f"{base}|{cl}|{law}"] = np.quantile(s, PROBS)
             scores[f"{base}|{cl}|{law}|hist"] = np.histogram(s, Z_EDGES, density=True)[0]
+
+
+def s1_lags(cov, zone):
+    """CSLC cell covariances ``(ni, nj, 6)`` -> zone lags ``(B, L, 3, 3)`` in the scan layout."""
+    ni, nj = (n - n % z for n, z in zip(cov.shape[:2], zone))
+    cov = np.asarray(cov[:ni, :nj], dtype=np.complex128)
+    lags = np.full((ni, nj, 3, 3), np.nan + 0j)
+    lags[..., 0, 0], lags[..., 1, 0], lags[..., 2, 0] = cov[..., 0], cov[..., 1], cov[..., 2]
+    lags[..., 0, 1], lags[..., 1, 1], lags[..., 0, 2] = cov[..., 3], cov[..., 4], cov[..., 5]
+    za, zb = zone
+    return (lags.reshape(ni // za, za, nj // zb, zb, 3, 3).transpose(0, 2, 1, 3, 4, 5)
+            .reshape(-1, za * zb, 3, 3))
 
 
 def simulated_lags(lags_real, window, zone, n_zones, h_az, h_rg, rng, batch=1000):
@@ -172,7 +201,7 @@ def simulated_lags(lags_real, window, zone, n_zones, h_az, h_rg, rng, batch=1000
 
 def main(args):
     rng = np.random.default_rng(args.seed)
-    inputs = [args.store] + ([args.spectrum] if args.spectrum else [])
+    inputs = [p for p in (args.store, args.spectrum, args.s1_triplets, args.s1_spectrum) if p]
     run = start_run(args.task, cli.params(args), *cli.run_roots(args), inputs,
                     allow_dirty=args.allow_dirty)
     logging.getLogger().addHandler(logging.FileHandler(run.small_dir / "log.txt"))
@@ -182,9 +211,10 @@ def main(args):
     writer.writeheader()
     profiles, scores, summary, t0 = {}, {"probs": PROBS, "z_edges": Z_EDGES}, [], time.time()
     zone = tuple(args.zone)
-    root = zarr.open_group(args.store, mode="r")
-    br, bc = root.attrs["window"]
-    lags = root[args.pol]["lags"]
+    if args.store:
+        root = zarr.open_group(args.store, mode="r")
+        br, bc = root.attrs["window"]
+        lags = root[args.pol]["lags"]
     if args.spectrum:
         sp = np.load(args.spectrum)
         h_az = kernel_from_spectrum(sp["s_az"], args.taps)
@@ -198,21 +228,23 @@ def main(args):
             good = np.isfinite(kappa).all(-1) & (kappa > 0).all(-1)
             phi, kappa, gmin = phi[good], kappa[good], gmin[good]
         d, c, z = fit_zones(phi, kappa)
+        d_free, k_free, _ = fit_zones(phi, np.ones_like(kappa))   # one free concentration
         key = (source, wname, t)
         evaluate(writer, scores, key, d.ravel(), kappa.ravel(), c.ravel(), z.ravel(), gmin.ravel(),
-                 args.classes, args.max_cells, rng)
+                 d_free.ravel(), k_free.ravel(), args.classes, args.max_cells, rng)
         base = "|".join(map(str, key))
-        prof = precision_profile(d.ravel(), kappa.ravel(), c.ravel(), rng=rng)
+        prof = precision_profile(d.ravel(), kappa.ravel(), c.ravel(), d_free.ravel(),
+                                 k_free.ravel(), rng=rng)
         profiles.update({f"{base}|{k}": v for k, v in prof.items()})
         cz = c[:, 0]
         summary.append({"source": source, "window": wname, "triplet": t, "zones": int(len(phi)),
                         "c_quartiles": np.quantile(cz[np.isfinite(cz)],
                                                    [0.25, 0.5, 0.75]).tolist()})
         fh.flush()
-        logger.info("%s %s t=%d: %d zones, median c %.3f, %.1f min", source, wname, t, len(phi),
+        logger.info("%s %s t=%s: %d zones, median c %.3f, %.1f min", source, wname, t, len(phi),
                     float(np.nanmedian(cz)), (time.time() - t0) / 60)
 
-    for a, b in args.factors:
+    for a, b in (args.factors if args.store else []):
         window, n_looks = (a * br, b * bc), a * b * br * bc
         wname = f"{window[0]}x{window[1]}"
         for t in args.triplets:
@@ -223,6 +255,22 @@ def main(args):
                 _, _, _, ok = zone_cells(Lz, n_looks)
                 Ls = simulated_lags(Lz[ok], window, zone, args.sim_zones, h_az, h_rg, rng)
                 process("sim_h0", wname, t, Ls, n_looks)
+    if args.s1_triplets:
+        s1 = zarr.open_group(args.s1_triplets, mode="r")
+        window = tuple(s1.attrs["window"])
+        n_looks, wname = window[0] * window[1], f"{window[0]}x{window[1]}"
+        if args.s1_spectrum:
+            sp = np.load(args.s1_spectrum)
+            k_az = kernel_from_spectrum(sp["s_az"], args.taps)
+            k_rg = kernel_from_spectrum(sp["s_rg"], args.taps)
+        for gname in args.s1_groups or sorted(s1.group_keys()):
+            g = s1[gname]
+            Lz = np.concatenate([s1_lags(g[b]["cov"][:], zone) for b in sorted(g.group_keys())])
+            process("sentinel1", wname, gname, Lz, n_looks)
+            if args.s1_spectrum:
+                _, _, _, ok = zone_cells(Lz, n_looks)
+                Ls = simulated_lags(Lz[ok], window, zone, args.sim_zones, k_az, k_rg, rng)
+                process("sim_h0_s1", wname, gname, Ls, n_looks)
     fh.close()
     np.savez_compressed(run.small_dir / "profiles.npz", **profiles)
     np.savez_compressed(run.small_dir / "scores.npz", **scores)
@@ -237,7 +285,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--store", type=Path, required=True, help="UAVSAR scan store.")
+    parser.add_argument("--store", type=Path, default=None, help="UAVSAR scan store.")
     parser.add_argument("--pol", default="VV")
     parser.add_argument("--factors", type=int, nargs=2, action="append", default=None,
                         help="Cell as a multiple of the base cell (repeatable). Default: 1 1, 2 2.")
@@ -255,6 +303,12 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--weights", default="own", choices=["own", "nb"],
                         help="Precisions of the cells: own coherences, or those of the neighbors.")
+    parser.add_argument("--s1-triplets", type=Path, default=None,
+                        help="CSLC triplet store (cslc_triplets.py): adds Sentinel-1.")
+    parser.add_argument("--s1-groups", nargs="+", default=None,
+                        help="Triplet groups of the store (default: all).")
+    parser.add_argument("--s1-spectrum", type=Path, default=None,
+                        help="spectrum.npz of slc_spectrum.py on the CSLC: Sentinel-1 reference.")
     cli.add_run_arguments(parser, task="closure-fit")
     args = parser.parse_args()
     args.factors = args.factors or [[1, 1], [2, 2]]
