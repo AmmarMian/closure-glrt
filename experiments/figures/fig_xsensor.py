@@ -76,13 +76,18 @@ def maps(args, runs, trip):
             tested = lookup(K, keys, np.zeros(len(keys)))
             closure = lookup(K, keys, np.where(det, mu, np.nan))
             row.append((K >= 0, tested, closure, det.mean()))
-        panels.append((s, ext, row))
+        box = None
+        if args.box:
+            x0, x1, y0, y1 = (v / args.zone_m for v in args.box)
+            e, n = K // 1_000_000, K % 1_000_000
+            box = (K >= 0) & (e >= x0) & (e < x1) & (n >= y0) & (n < y1)
+        panels.append((s, ext, row, box))
     aspect = (panels[0][1][2]) / panels[0][1][1]
     fig = plt.figure(figsize=(PAGE, 2 * (PAGE * 0.46) * aspect * len(segs) / 2 + 0.75))
     gs = fig.add_gridspec(len(segs), 3, width_ratios=[1, 1, 0.03], wspace=0.07, hspace=0.45,
                           left=0.055, right=0.935, top=0.93, bottom=0.17)
     letters = iter("abcdefgh")
-    for i, (s, ext, row) in enumerate(panels):
+    for i, (s, ext, row, box) in enumerate(panels):
         for j, ((swath, tested, closure, share), (_, label)) in enumerate(zip(row, SENSORS)):
             ax = fig.add_subplot(gs[i, j])
             ax.imshow(np.where(swath, 0.0, np.nan), extent=ext, aspect="equal",
@@ -91,6 +96,9 @@ def maps(args, runs, trip):
                       cmap=LinearSegmentedColormap.from_list("u", [UNDETECTED, UNDETECTED]),
                       vmin=0, vmax=1)
             im = ax.imshow(closure, extent=ext, aspect="equal", cmap=CMAP, norm=norm)
+            if box is not None and box.any():
+                ax.contour(box.astype(float), levels=[0.5], colors=INK, linewidths=1.0,
+                           extent=(ext[0], ext[1], ext[3], ext[2]), origin="upper")
             ax.set_title(f"({next(letters)}) {label}, segment {s}", loc="left",
                          fontweight="bold", pad=3)
             ax.set_title(f"detected: {100 * share:.0f}%", loc="right", pad=3)
@@ -169,6 +177,8 @@ if __name__ == "__main__":
     parser.add_argument("--zone-m", type=float, default=100.0)
     parser.add_argument("--radar-keys", nargs="+", default=None,
                         help="SEG=radar_keys.npz of radar_zone_keys.py (needed for the maps).")
+    parser.add_argument("--box", type=float, nargs=4, default=None,
+                        help="UTM box (xmin xmax ymin ymax, m) outlined on the maps.")
     parser.add_argument("--out-maps", type=Path, default=None)
     parser.add_argument("--out-widths", type=Path, default=None)
     main(parser.parse_args())
