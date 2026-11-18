@@ -16,7 +16,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from style import COLUMN, GRID, INK, MUTED, S1, SAMEDAY, UAVSAR, panel_label, style
+from style import COLUMN, GRID, INK, MUTED, S1, SAMEDAY, UAVSAR, style
 
 TESTS = {"scale_free": ("scale-free (proposed, own)", UAVSAR, "o", "-"),
          "scale_free_nb": ("scale-free (neighbors)", UAVSAR, "o", "--"),
@@ -37,7 +37,7 @@ def main(args):
     style()
     comp = read(args.competitors, args.window)
     white = read(args.white, args.window)
-    fig, (a, b) = plt.subplots(2, 1, figsize=(COLUMN, 4.6), gridspec_kw={"hspace": 0.9})
+    fig, (a, b) = plt.subplots(2, 1, figsize=(COLUMN, 4.8), gridspec_kw={"hspace": 1.1})
     x = np.arange(len(CLASSES))
     for m, (lab, col, mk, ls) in TESTS.items():
         y = [next((float(r["reject"]) for r in comp if r["method"] == m and r["class"] == c
@@ -58,23 +58,24 @@ def main(args):
     a.grid(color=GRID, lw=0.4)
     a.legend(fontsize=5.5, ncol=2, frameon=False, loc="upper center",
              bbox_to_anchor=(0.5, -0.32))
-    panel_label(a, "(a)", corner="right")
+    a.set_title("(a) false alarms", loc="left", fontweight="bold")
     closures = sorted({float(r["closure_deg"]) for r in comp})
     for m in ("scale_free", "scale_free_nb", "equal", "plugin"):
         lab, col, mk, ls = TESTS[m]
         pts = [(mu, float(r["reject"])) for mu in closures for r in comp
                if r["method"] == m and r["class"] == args.power_class
                and float(r["closure_deg"]) == mu]
-        if pts:
-            b.plot([p[0] for p in pts], [p[1] for p in pts], color=col, marker=mk, ls=ls, lw=0.9,
-                   ms=3, label=lab)
-    b.set_xscale("symlog", linthresh=0.25)
-    b.set_xticks(closures, [f"{v:g}" for v in closures])
+        if pts:                       # closures equally spaced, as in the coverage figure
+            b.plot([closures.index(p[0]) for p in pts], [p[1] for p in pts], color=col, marker=mk,
+                   ls=ls, lw=0.9, ms=3, label=lab)
+    b.set_xticks(range(len(closures)), [f"{v:g}" for v in closures])
+    b.axhline(args.pfa, color=INK, lw=0.6, ls=":")
     b.set_xlabel(r"closure $\mu$ (deg)")
     b.set_ylabel("detection probability")
     b.grid(color=GRID, lw=0.4)
     b.legend(fontsize=5.5, frameon=False, loc="upper left")
-    panel_label(b, "(b)", corner="right")
+    b.set_title(f"(b) power, {args.power_class.replace('-', '$\\leq\\bar\\gamma<$')}",
+                loc="left", fontweight="bold")
     fig.savefig(args.out, bbox_inches="tight")
 
 

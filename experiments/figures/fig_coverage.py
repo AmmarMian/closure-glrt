@@ -1,8 +1,9 @@
-r"""Coverage figure of the TGRS paper (two columns): coverage of the 95% intervals (top) and bias
-of the estimate of the closure (bottom) against the true closure, per class of zone coherence.
+r"""Coverage figure of the TGRS paper (two columns): coverage of the 95% arc (top) and bias of the
+estimate of the closure in percent of the closure (bottom) against the true closure, per class of
+zone coherence, for the arc with own and with neighbor precisions. The bias is shown at every
+nonzero closure with its 2-sigma Monte Carlo error (rmse / sqrt(zones)).
 
-Input: run directories of ``experiments/detection/coverage.py`` (scenario touching; the run with
-the Yuan table adds the two tests of the literature). Output: a PDF.
+Input: run directories of ``experiments/detection/coverage.py`` (scenario touching). Output: a PDF.
 
 Example:
     python experiments/figures/fig_coverage.py --runs <run1> <run2> --window 15x5 --out cov.pdf
@@ -14,16 +15,11 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from style import GRID, INK, MUTED, PAGE, S1, SAMEDAY, UAVSAR, style
+from style import GRID, INK, PAGE, S1, UAVSAR, style
 
 METHODS = {
-    "scale_free": ("scale-free, own precisions", UAVSAR, "o", "--"),
-    "scale_free_nb": ("scale-free, neighbor precisions", UAVSAR, "o", "-"),
-    "plugin": ("plug-in ENL", SAMEDAY, "D", "-"),
-    "equal": ("equal weights", MUTED, "^", "-"),
-    "bootstrap": ("bootstrap", "#8a5cc2", "v", "-"),
-    "zwieback": ("Zwieback (zone)", S1, "s", "-"),
-    "yuan": ("Yuan (zone)", "#b0325a", "P", "-"),
+    "scale_free": (r"own precisions $\kappa_{0,\ell}$", S1, "s", "--"),
+    "scale_free_nb": (r"neighbor precisions $\tilde\kappa_{0,\ell}$", UAVSAR, "o", "-"),
 }
 CLASSES = ("0.5-0.7", "0.7-0.9", "0.9-1.01")
 LABELS = {"0.5-0.7": r"$0.5\leq\bar\gamma<0.7$", "0.7-0.9": r"$0.7\leq\bar\gamma<0.9$",
@@ -54,12 +50,18 @@ def main(args):
             i = np.array([p[0] for p in pts])
             cov = np.array([float(p[1]["coverage"]) for p in pts])
             bias = np.array([float(p[1]["mean_error_deg"]) for p in pts])
+            se = np.array([float(p[1]["rmse_deg"]) / np.sqrt(float(p[1]["zones"])) for p in pts])
             mu = np.array([closures[k] for k in i])
-            rel = np.where(mu >= 1, bias / np.where(mu > 0, mu, 1), np.nan)   # noisy below 1 deg
-            kw = dict(color=col, marker=mk, ls=ls, lw=0.9, ms=2.8, label=lab)
+            pos = mu > 0
+            kw = dict(color=col, marker=mk, ls=ls, lw=0.9, ms=3, label=lab)
             axes[0, j].plot(i, cov, **kw)
-            axes[1, j].plot(i, 100 * rel, **kw)
+            off = -0.08 if m == "scale_free" else 0.08            # side by side error bars
+            axes[1, j].errorbar(i[pos] + off, 100 * bias[pos] / mu[pos],
+                                yerr=200 * se[pos] / mu[pos], capsize=1.5, elinewidth=0.6, **kw)
         axes[0, j].axhline(0.95, color=INK, lw=0.6, ls=":")
+        if c == "0.9-1.01":
+            axes[0, j].text(len(closures) - 1, 0.5, "not\nfeasible", ha="center", va="center",
+                            fontsize=6, color="#6b6a64")
         axes[1, j].axhline(0.0, color=INK, lw=0.6, ls=":")
         axes[0, j].set_title(f"({'abc'[j]}) " + LABELS[c])
         axes[1, j].set_title(f"({'def'[j]}) " + LABELS[c])
@@ -67,15 +69,17 @@ def main(args):
             a.grid(color=GRID, lw=0.4)
             a.set_xticks(xs, [f"{v:g}" for v in closures])
         axes[1, j].set_xlabel(r"true closure $\mu$ (deg)")
-    axes[0, 0].set_ylabel("coverage of the 95% interval")
+    axes[0, 0].set_ylabel("coverage of the 95% arc")
     axes[0, 0].yaxis.set_label_coords(-0.14, 0.5)
     axes[1, 0].yaxis.set_label_coords(-0.14, 0.5)
     axes[1, 0].set_ylabel(r"bias of $\hat\mu$ (% of $\mu$)")
     axes[0, 0].set_ylim(0, 1.02)
-    axes[1, 0].set_ylim(-30, 10)
+    axes[1, 0].set_ylim(-45, 45)
+    for a in axes.ravel():
+        a.set_xlim(-0.5, len(closures) - 0.5)
     h, lab = axes[0, 0].get_legend_handles_labels()
-    fig.legend(h, lab, loc="lower center", ncol=4, frameon=False, fontsize=6.5,
-               bbox_to_anchor=(0.5, -0.02))
+    fig.legend(h, lab, loc="lower center", ncol=2, frameon=False, fontsize=7,
+               bbox_to_anchor=(0.5, -0.01))
     fig.tight_layout(rect=(0, 0.08, 1, 1))
     fig.savefig(args.out, bbox_inches="tight")
 
