@@ -73,29 +73,52 @@ def coverage_table(rows, window):
     return "\n".join(out)
 
 
+# Groups of Table IV (step of the simulation diagram that each variant modifies) and the limits
+# beyond which a value departs from the nominal behaviour and is set in bold.
+GROUPS = [(None, ["touching"]),
+          ("Speckle texture, step (a)", ["texture1", "texture4", "texture20"]),
+          ("Coherence within the cell, step (b)", ["mixed"]),
+          ("Closure within the zone, step (b)", ["ramp", "split", "split3"]),
+          ("Zone size, step (c)", ["zone3", "zone7"])]
+LIMITS = dict(reject=0.02, power=0.50, coverage=0.92)
+
+
 def robustness_table(by_key, window):
+    labels = {k: label for k, _, label in SCEN}
+
+    def bold(text, flag):
+        return rf"\textbf{{{text}}}" if flag else text
+
     out = [r"\begin{tabular}{@{}lrrrrr@{}}", r"\toprule",
            r" & \multicolumn{2}{c}{Rej. at $\mu=0$ (\%)} & Pow. & Cov. & Bias \\",
            r" & $\bar\gamma\ge0.2$ & $<0.2$ & (\%) & (\%) & (deg) \\",
            r"\midrule"]
-    for k, zone, label in SCEN:
-        rows = by_key.get(k)
-        if not rows:
-            continue
-        rows = [r for r in rows if r["window"] == window]
-        pf = [float(r["reject"]) for r in rows if r["method"] == "scale_free"
-              and float(r["closure_deg"]) == 0 and r["class"] not in ("0-0.2",)]
-        pf0 = [float(r["reject"]) for r in rows if r["method"] == "scale_free"
-               and float(r["closure_deg"]) == 0 and r["class"] == "0-0.2"]
-        h1 = {r["method"]: r for r in rows if float(r["closure_deg"]) == 2
-              and r["class"] == "0.7-0.9"}
-        cells = [f"{100 * min(pf):.1f}--{100 * max(pf):.1f}" if pf else "--",
-                 pct(pf0[0]) if pf0 else "--",
-                 pct(h1["scale_free"]["reject"]) if "scale_free" in h1 else "--",
-                 pct(h1["scale_free_nb"]["coverage"]) if "scale_free_nb" in h1 else "--",
-                 f"{float(h1['scale_free_nb']['mean_error_deg']):+.2f}"
-                 if "scale_free_nb" in h1 else "--"]
-        out.append(f"{label} & " + " & ".join(cells) + r" \\")
+    for title, keys in GROUPS:
+        if title:
+            out.append(r"\multicolumn{6}{@{}l}{\textit{" + title + r"}} \\")
+        for k in keys:
+            rows = [r for r in by_key.get(k, []) if r["window"] == window]
+            if not rows:
+                continue
+            pf = [float(r["reject"]) for r in rows if r["method"] == "scale_free"
+                  and float(r["closure_deg"]) == 0 and r["class"] not in ("0-0.2",)]
+            pf0 = [float(r["reject"]) for r in rows if r["method"] == "scale_free"
+                   and float(r["closure_deg"]) == 0 and r["class"] == "0-0.2"]
+            h1 = {r["method"]: r for r in rows if float(r["closure_deg"]) == 2
+                  and r["class"] == "0.7-0.9"}
+            pw = float(h1["scale_free"]["reject"]) if "scale_free" in h1 else None
+            cv = float(h1["scale_free_nb"]["coverage"]) if "scale_free_nb" in h1 else None
+            cells = [bold(f"{100 * min(pf):.1f}--{100 * max(pf):.1f}", max(pf) > LIMITS["reject"])
+                     if pf else "--",
+                     bold(pct(pf0[0]), pf0[0] > LIMITS["reject"]) if pf0 else "--",
+                     bold(pct(pw), pw < LIMITS["power"]) if pw is not None else "--",
+                     bold(pct(cv), cv < LIMITS["coverage"]) if cv is not None else "--",
+                     f"{float(h1['scale_free_nb']['mean_error_deg']):+.2f}"
+                     if "scale_free_nb" in h1 else "--"]
+            label = r"\textit{Reference (model)}" if k == "touching" else r"\quad " + labels[k]
+            out.append(f"{label} & " + " & ".join(cells) + r" \\")
+            if k == "touching":
+                out.append(r"\midrule")
     out += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(out)
 
