@@ -25,11 +25,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap
 from matplotlib.patches import Patch
-from scipy import ndimage
 from style import COLUMN, GRID, INK, MUTED, PAGE, S1, UAVSAR, style
 
 NEG, MID, POS = "#c0392b", "#f4f3ee", "#1f5fae"
-UNDETECTED = "#c9c8c2"                         # zone tested, no closure detected
+UNDETECTED = "#b9b8b2"                         # zone tested, no closure detected
+SWATH = "#f1f0eb"                              # inside the UAVSAR swath, not a common zone
+AZ_M, RG_M = 0.6, 1.6655                       # UAVSAR SLC pixel spacing (azimuth, slant range)
 CMAP = LinearSegmentedColormap.from_list("closure", [NEG, "#ef9a8a", MID, "#8db7e6", POS])
 SENSORS = (("uavsar", "UAVSAR (L)"), ("s1", "Sentinel-1 (C)"))
 
@@ -38,106 +39,81 @@ def pairs(items):
     return dict(s.split("=", 1) for s in items)
 
 
-def coords(keys):
-    return (keys // 1_000_000).astype(float), (keys % 1_000_000).astype(float)
 
 
-def strip_angle(all_keys):
-    """Angle (rad) of the flight line: mean over the segments of the principal axis of their zone
-    centres, each folded to (-90, 90] degrees."""
-    out = []
-    for keys in all_keys:
-        e, n = coords(keys)
-        v = np.linalg.eigh(np.cov(np.c_[e - e.mean(), n - n.mean()].T))[1][:, -1]
-        out.append((np.arctan2(v[1], v[0]) + np.pi / 2) % np.pi - np.pi / 2)
-    return float(np.mean(out))
 
 
-def rotated_grid(keys, values, angle_deg):
-    """Raster of ``values`` on the zone grid (north up), rotated by ``angle_deg`` (nearest)."""
-    e, n = coords(keys)
-    e, n = (e - e.min()).astype(int), (n - n.min()).astype(int)
-    img = np.full((n.max() + 1, e.max() + 1), np.nan)
-    img[n.max() - n, e] = values                  # row 0 = north
-    out = ndimage.rotate(np.nan_to_num(img, nan=-999.0), -angle_deg, order=0, reshape=True,
-                         cval=-999.0)
-    out[out == -999.0] = np.nan
+
+def lookup(grid_keys, keys, values):
+    """Values of the zones ``keys`` at the positions of ``grid_keys`` (nan where absent)."""
+    order = np.argsort(keys)
+    sk = keys[order]
+    pos = np.clip(np.searchsorted(sk, grid_keys), 0, len(sk) - 1)
+    found = (sk[pos] == grid_keys) & (grid_keys >= 0)
+    out = np.full(grid_keys.shape, np.nan)
+    out[found] = values[order][pos[found]]
     return out
 
 
-def crop(*imgs):
-    ok = np.isfinite(imgs[0])
-    for im in imgs[1:]:
-        ok |= np.isfinite(im)
-    r, c = np.flatnonzero(ok.any(1)), np.flatnonzero(ok.any(0))
-    return [im[r[0]:r[-1] + 1, c[0]:c[-1] + 1] for im in imgs]
-
-
-def decorate(ax, angle_deg, zone_m, km=10):
-    ax.set_xticks([])
-    ax.set_yticks([])
-    for s in ax.spines.values():
-        s.set_color(GRID)
-    w = km * 1000 / zone_m
-    x0, x1 = ax.get_xlim()
-    frac = w / abs(x1 - x0)
-    ax.plot([0.03, 0.03 + frac], [0.07, 0.07], transform=ax.transAxes, color=INK, lw=1.3,
-            solid_capstyle="butt")
-    ax.text(0.03 + frac / 2, 0.1, f"{km} km", transform=ax.transAxes, ha="center", va="bottom",
-            fontsize=7)
-    a = np.radians(90 - angle_deg)                # north after the rotation of the map
-    cx, cy, L = 0.95, 0.2, 0.09
-    ax.annotate("", xy=(cx + L * np.cos(a) * 0.55, cy + L * np.sin(a)), xytext=(cx, cy),
-                xycoords="axes fraction",
-                arrowprops=dict(arrowstyle="-|>", color=INK, lw=0.8, mutation_scale=6))
-    ax.text(cx + L * np.cos(a) * 0.75, cy + L * np.sin(a) * 1.3, "N", transform=ax.transAxes,
-            ha="center", va="center", fontsize=7)
-
-
 def maps(args, runs, trip):
+    """Zone results drawn on the UAVSAR radar grid (``radar_zone_keys.py``): azimuth along the
+    horizontal axis, slant range along the vertical axis, as the amplitude images."""
     segs = list(runs)
-    data = {s: np.load(Path(runs[s]) / "zones.npz") for s in segs}
-    angle = np.degrees(strip_angle([data[s][f"{trip[s]}__keys"] for s in segs]))
+    rk = pairs(args.radar_keys)
     norm = BoundaryNorm(np.arange(-args.vmax, args.vmax + 1e-9, 0.5), CMAP.N, extend="both")
     panels = []
     for s in segs:
-        z, name = data[s], trip[s]
+        z, name = np.load(Path(runs[s]) / "zones.npz"), trip[s]
+        r = np.load(rk[s])
+        K = r["keys"].T                                    # rows: range, columns: azimuth
+        step_az, step_rg = (float(v) for v in r["step"])
+        ext = (0, K.shape[1] * step_az * AZ_M / 1e3, K.shape[0] * step_rg * RG_M / 1e3, 0)
         keys = z[f"{name}__keys"]
         row = []
         for sensor, _ in SENSORS:
             det = z[f"{name}__p_{sensor}"] < args.pfa
             mu = np.degrees(z[f"{name}__mu_{sensor}"])
-            row += [rotated_grid(keys, np.where(det, np.nan, 0.0), angle),
-                    rotated_grid(keys, np.where(det, mu, np.nan), angle), det.mean()]
-        g = crop(row[0], row[1], row[3], row[4])
-        panels.append((s, name, [(g[0], g[1], row[2]), (g[2], g[3], row[5])]))
-    heights = [p[2][0][0].shape[0] / p[2][0][0].shape[1] for p in panels]
-    fig = plt.figure(figsize=(PAGE, PAGE / 2.25 * sum(heights) + 0.5))
-    gs = fig.add_gridspec(len(segs), 3, width_ratios=[1, 1, 0.035], height_ratios=heights,
-                          wspace=0.04, hspace=0.14, left=0.01, right=0.93, top=0.95,
-                          bottom=0.09)
+            tested = lookup(K, keys, np.zeros(len(keys)))
+            closure = lookup(K, keys, np.where(det, mu, np.nan))
+            row.append((K >= 0, tested, closure, det.mean()))
+        panels.append((s, ext, row))
+    aspect = (panels[0][1][2]) / panels[0][1][1]
+    fig = plt.figure(figsize=(PAGE, 2 * (PAGE * 0.46) * aspect * len(segs) / 2 + 0.75))
+    gs = fig.add_gridspec(len(segs), 3, width_ratios=[1, 1, 0.03], wspace=0.07, hspace=0.45,
+                          left=0.055, right=0.935, top=0.93, bottom=0.17)
     letters = iter("abcdefgh")
-    for i, (s, name, row) in enumerate(panels):
-        for j, ((base, col, share), (_, label)) in enumerate(zip(row, SENSORS)):
+    for i, (s, ext, row) in enumerate(panels):
+        for j, ((swath, tested, closure, share), (_, label)) in enumerate(zip(row, SENSORS)):
             ax = fig.add_subplot(gs[i, j])
-            ax.imshow(np.where(np.isfinite(base), 0.0, np.nan),
+            ax.imshow(np.where(swath, 0.0, np.nan), extent=ext, aspect="equal",
+                      cmap=LinearSegmentedColormap.from_list("s", [SWATH, SWATH]), vmin=0, vmax=1)
+            ax.imshow(np.where(np.isfinite(tested), 0.0, np.nan), extent=ext, aspect="equal",
                       cmap=LinearSegmentedColormap.from_list("u", [UNDETECTED, UNDETECTED]),
-                      vmin=0, vmax=1, origin="upper")
-            im = ax.imshow(col, cmap=CMAP, norm=norm, origin="upper")
-            decorate(ax, angle, args.zone_m)
-            ax.set_title(f"({next(letters)}) {label}, segment {s}",
-                         loc="left", fontweight="bold", fontsize=7, pad=3)
-            ax.set_title(f"detected: {100 * share:.0f}%", loc="right", fontsize=7, pad=3,
-                         color=INK)
+                      vmin=0, vmax=1)
+            im = ax.imshow(closure, extent=ext, aspect="equal", cmap=CMAP, norm=norm)
+            ax.set_title(f"({next(letters)}) {label}, segment {s}", loc="left",
+                         fontweight="bold", pad=3)
+            ax.set_title(f"detected: {100 * share:.0f}%", loc="right", pad=3)
+            for sp in ax.spines.values():
+                sp.set_color(GRID)
+            ax.tick_params(length=2)
+            if i == len(panels) - 1:
+                ax.set_xlabel("azimuth (km)")
+            if j == 0:
+                ax.set_ylabel("range (km)")
+            else:
+                ax.set_yticklabels([])
     cax = fig.add_subplot(gs[:, 2])
     cb = fig.colorbar(im, cax=cax, orientation="vertical", extend="both",
                       ticks=np.arange(-args.vmax, args.vmax + 1e-9, 1.0))
     cb.set_label(r"detected closure $\hat\mu$ (°)", color=INK)
     cb.outline.set_edgecolor(MUTED)
     cb.ax.tick_params(length=2)
-    fig.legend(handles=[Patch(fc=UNDETECTED, ec="none", label="tested, not detected")],
-               loc="lower left", bbox_to_anchor=(0.005, 0.0), frameon=False, fontsize=7,
-               handlelength=1.0)
+    fig.legend(handles=[Patch(fc=UNDETECTED, ec="none", label="zone tested, no closure detected"),
+                        Patch(fc=SWATH, ec=GRID, lw=0.5,
+                              label="UAVSAR swath, zone not coherent in both sensors")],
+               loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=2, frameon=False,
+               handlelength=1.2)
     fig.savefig(args.out_maps)
     print("wrote", args.out_maps)
 
@@ -191,6 +167,8 @@ if __name__ == "__main__":
     parser.add_argument("--pfa", type=float, default=0.01)
     parser.add_argument("--vmax", type=float, default=3.0, help="Color limit (deg).")
     parser.add_argument("--zone-m", type=float, default=100.0)
+    parser.add_argument("--radar-keys", nargs="+", default=None,
+                        help="SEG=radar_keys.npz of radar_zone_keys.py (needed for the maps).")
     parser.add_argument("--out-maps", type=Path, default=None)
     parser.add_argument("--out-widths", type=Path, default=None)
     main(parser.parse_args())
