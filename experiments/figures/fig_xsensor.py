@@ -84,14 +84,14 @@ def decorate(ax, angle_deg, zone_m, km=10):
     ax.plot([0.03, 0.03 + frac], [0.07, 0.07], transform=ax.transAxes, color=INK, lw=1.3,
             solid_capstyle="butt")
     ax.text(0.03 + frac / 2, 0.1, f"{km} km", transform=ax.transAxes, ha="center", va="bottom",
-            fontsize=6)
+            fontsize=7)
     a = np.radians(90 - angle_deg)                # north after the rotation of the map
     cx, cy, L = 0.95, 0.2, 0.09
     ax.annotate("", xy=(cx + L * np.cos(a) * 0.55, cy + L * np.sin(a)), xytext=(cx, cy),
                 xycoords="axes fraction",
                 arrowprops=dict(arrowstyle="-|>", color=INK, lw=0.8, mutation_scale=6))
     ax.text(cx + L * np.cos(a) * 0.75, cy + L * np.sin(a) * 1.3, "N", transform=ax.transAxes,
-            ha="center", va="center", fontsize=6)
+            ha="center", va="center", fontsize=7)
 
 
 def maps(args, runs, trip):
@@ -127,7 +127,7 @@ def maps(args, runs, trip):
             decorate(ax, angle, args.zone_m)
             ax.set_title(f"({next(letters)}) {label}, segment {s}",
                          loc="left", fontweight="bold", fontsize=7, pad=3)
-            ax.set_title(f"detected: {100 * share:.0f}%", loc="right", fontsize=6.5, pad=3,
+            ax.set_title(f"detected: {100 * share:.0f}%", loc="right", fontsize=7, pad=3,
                          color=INK)
     cax = fig.add_subplot(gs[:, 2])
     cb = fig.colorbar(im, cax=cax, orientation="vertical", extend="both",
@@ -136,7 +136,7 @@ def maps(args, runs, trip):
     cb.outline.set_edgecolor(MUTED)
     cb.ax.tick_params(length=2)
     fig.legend(handles=[Patch(fc=UNDETECTED, ec="none", label="tested, not detected")],
-               loc="lower left", bbox_to_anchor=(0.005, 0.0), frameon=False, fontsize=6.5,
+               loc="lower left", bbox_to_anchor=(0.005, 0.0), frameon=False, fontsize=7,
                handlelength=1.0)
     fig.savefig(args.out_maps)
     print("wrote", args.out_maps)
@@ -167,7 +167,7 @@ def widths(args, runs, trip):
             ax.spines[sp].set_visible(False)
         ax.set_title(f"({'abcd'[i]}) segment {s}", loc="left", fontweight="bold")
         ax.set_ylim(0, ax.get_ylim()[1] * 1.45)
-        ax.legend(frameon=False, fontsize=6, loc="upper right", ncol=1)
+        ax.legend(frameon=False, fontsize=7, loc="upper right", ncol=1)
     np.atleast_1d(axes)[-1].set_xlabel(r"half-width $\Delta$ of the 95% arc (°)")
     fig.tight_layout()
     fig.savefig(args.out_widths)

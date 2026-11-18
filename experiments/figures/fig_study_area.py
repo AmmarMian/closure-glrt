@@ -71,7 +71,7 @@ def db_image(ax, inten, extent, label):
     ax.imshow(v, cmap="gray", vmin=lo, vmax=hi, extent=extent, origin="upper")
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.text(0.02, 0.02, label, transform=ax.transAxes, fontsize=6, va="bottom", ha="left",
+    ax.text(0.02, 0.02, label, transform=ax.transAxes, fontsize=7, va="bottom", ha="left",
             color=INK, bbox=dict(fc="white", ec="none", pad=1.2))
 
 
@@ -82,7 +82,7 @@ def scale_bar(ax, extent, length=500.0, label="500 m", fx=0.62, fy=0.06):
     ax.plot([x0, x0 + length], [y0, y0], color="white", lw=2.2, solid_capstyle="butt")
     ax.plot([x0, x0 + length], [y0, y0], color=INK, lw=1.0, solid_capstyle="butt")
     ax.text(x0 + length / 2, y0 - 0.025 * (extent[3] - extent[2]), label,
-            ha="center", va="top", fontsize=6, color=INK,
+            ha="center", va="top", fontsize=7, color=INK,
             bbox=dict(fc="white", ec="none", pad=0.8))
 
 
@@ -128,19 +128,19 @@ def main(args):
                            (cext[3] - cext[2]) / 1e3, fill=False, ec="white", lw=2.0))
     ax.add_patch(Rectangle((cext[0] / 1e3, cext[2] / 1e3), (cext[1] - cext[0]) / 1e3,
                            (cext[3] - cext[2]) / 1e3, fill=False, ec=INK, lw=0.8))
-    ax.text(cext[1] / 1e3 + 0.4, cext[3] / 1e3, "(b, c)", fontsize=6, color=INK, va="top",
+    ax.text(cext[1] / 1e3 + 0.4, cext[3] / 1e3, "(b, c)", fontsize=7, color=INK, va="top",
             bbox=dict(fc="white", ec="none", pad=0.8))
     ax.set_xlim(ext_km[:2])
     ax.set_ylim(ext_km[2:])
     ax.set_aspect("equal")
     ax.set_xlabel("Easting (km, UTM 10N)", labelpad=1)
     ax.set_ylabel("Northing (km)", labelpad=1)
-    ax.text(0.02, 0.02, f"Landsat 8, {img_date}", transform=ax.transAxes, fontsize=6,
+    ax.text(0.02, 0.02, f"Landsat 8, {img_date}", transform=ax.transAxes, fontsize=7,
             va="bottom", color=INK, bbox=dict(fc="white", ec="none", pad=1.2))
     ax.text(0.98, 0.98, "UAVSAR SDelta_23518 (s1)", transform=ax.transAxes, color=INK,
-            fontsize=6, ha="right", va="top", bbox=dict(fc="white", ec=UAVSAR, lw=0.8, pad=1.5))
+            fontsize=7, ha="right", va="top", bbox=dict(fc="white", ec=UAVSAR, lw=0.8, pad=1.5))
     ax.text(0.98, 0.92, "Sentinel-1 bursts " + ", ".join(tracks), transform=ax.transAxes,
-            color=INK, fontsize=6, ha="right", va="top",
+            color=INK, fontsize=7, ha="right", va="top",
             bbox=dict(fc="white", ec=S1, lw=0.8, pad=1.5))
     scale_bar(ax, ext_km, 5.0, "5 km", fx=0.82, fy=0.92)
     panel_label(ax, "(a)", bg="white")

@@ -56,7 +56,7 @@ def main(args):
     a.set_xlabel(r"zone coherence $\bar\gamma$")
     a.set_ylabel("rejection rate under $H_0$")
     a.grid(color=GRID, lw=0.4)
-    a.legend(fontsize=5.5, ncol=2, frameon=False, loc="upper center",
+    a.legend(fontsize=7, ncol=2, frameon=False, loc="upper center",
              bbox_to_anchor=(0.5, -0.32))
     a.set_title("(a) false alarms", loc="left", fontweight="bold")
     closures = sorted({float(r["closure_deg"]) for r in comp})
@@ -73,7 +73,7 @@ def main(args):
     b.set_xlabel(r"closure $\mu$ (deg)")
     b.set_ylabel("detection probability")
     b.grid(color=GRID, lw=0.4)
-    b.legend(fontsize=5.5, frameon=False, loc="upper left")
+    b.legend(fontsize=7, frameon=False, loc="upper left")
     b.set_title(f"(b) power, {args.power_class.replace('-', '$\\leq\\bar\\gamma<$')}",
                 loc="left", fontweight="bold")
     fig.savefig(args.out, bbox_inches="tight")

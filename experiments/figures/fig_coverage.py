@@ -61,7 +61,7 @@ def main(args):
         axes[0, j].axhline(0.95, color=INK, lw=0.6, ls=":")
         if c == "0.9-1.01":
             axes[0, j].text(len(closures) - 1, 0.5, "not\nfeasible", ha="center", va="center",
-                            fontsize=6, color="#6b6a64")
+                            fontsize=7, color="#6b6a64")
         axes[1, j].axhline(0.0, color=INK, lw=0.6, ls=":")
         axes[0, j].set_title(f"({'abc'[j]}) " + LABELS[c])
         axes[1, j].set_title(f"({'def'[j]}) " + LABELS[c])

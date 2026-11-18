@@ -68,7 +68,7 @@ def main(args):
         ax_s.plot(t, y, "-o", color=col, lw=0.9, ms=1.8, label=label, zorder=2)
     ax_s.set_ylim(0, None)
     ax_s.set_ylabel(r"Detected share $\rho_t$", labelpad=1)
-    ax_s.legend(fontsize=5.5, frameon=False, loc="lower left", ncol=3, handlelength=1.5,
+    ax_s.legend(fontsize=7, frameon=False, loc="lower left", ncol=3, handlelength=1.5,
                 columnspacing=1.0, borderaxespad=0.1, bbox_to_anchor=(0.0, 1.0))
     panel_label(ax_s, "(a)", corner="right")
     ax_s.set_xlabel(r"Triplet $t$", labelpad=1)
@@ -100,12 +100,12 @@ def main(args):
         ax.set_yticks(y, [SHORT.get(c, c) for c in crops] if j == 0 else [])
         ax.tick_params(axis="y", length=0)
         d = by[k, crops[0]]["dates"].split("/")
-        ax.set_title(f"$t={k}$: {d[0][2:]}, {d[1][5:]}, {d[2][5:]}", fontsize=6, pad=2)
+        ax.set_title(f"$t={k}$: {d[0][2:]}, {d[1][5:]}, {d[2][5:]}", fontsize=7, pad=2)
         despine(ax)
         if j == 0:
             fig.text(0.01, ax.get_position().y1 + 0.012, "(b)", fontweight="bold", fontsize=7)
     fig.text(0.59, 0.012, r"Share of zones detected with $\hat\mu<0$ (red) and $\hat\mu>0$ (blue)",
-             ha="center", fontsize=6.5, color=INK)
+             ha="center", fontsize=7, color=INK)
     fig.savefig(args.out)
 
 

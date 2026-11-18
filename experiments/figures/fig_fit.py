@@ -32,7 +32,7 @@ LAWS = {"vm_c": dict(color=BLUE, ls="-", lw=1.7, marker=None,
         "vm_free": dict(color=VERM, ls="--", lw=1.4, marker="^",
                         text="free concentration $\\hat\\kappa$, equal weights"),
         "vm_1": dict(color=INK, ls=":", lw=1.6, marker="x", text="nominal looks ($c=1$)")}
-FONT = 8.5
+FONT = 8
 
 
 def label_at(ax, x, y, text, color, dx=1.08, dy=1.0, ha="left", va="center", log=True):
@@ -68,8 +68,8 @@ def spread_panel(ax, prof, src, sim, win, t, min_kappa):
     ax.yaxis.set_major_locator(LogLocator(subs=(1, 2, 5)))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     ax.yaxis.set_minor_formatter(NullFormatter())
-    ax.set_xlabel(r"precision $\kappa_{0,\ell}$ of the cell", fontsize=FONT)
-    ax.set_ylabel(r"95% quantile of $|\hat\Phi_\ell-\hat\mu|$ (deg)", fontsize=FONT)
+    ax.set_xlabel(r"precision $\kappa_{0,\ell}$", fontsize=FONT)
+    ax.set_ylabel(r"95% of $|\hat\Phi_\ell-\hat\mu|$ (deg)", fontsize=FONT)
 
 
 def qq_panel(ax, sc, src, sim, win, t, ylim=5.0):
@@ -90,8 +90,8 @@ def qq_panel(ax, sc, src, sim, win, t, ylim=5.0):
                 color=INK)
     ax.set_xlim(-4.0, 4.0)
     ax.set_ylim(-ylim, ylim)
-    ax.set_xlabel("standard normal quantile", fontsize=FONT)
-    ax.set_ylabel("quantile of the normal scores", fontsize=FONT)
+    ax.set_xlabel("$\\mathcal{N}(0,1)$ quantile", fontsize=FONT)
+    ax.set_ylabel("normal score quantile", fontsize=FONT)
 
 
 def main(args):
@@ -104,11 +104,12 @@ def main(args):
     if args.s1_triplet:
         rows.append(("sentinel1", "sim_h0_s1", args.s1_window, args.s1_triplet,
                      "Sentinel-1"))
-    fig, axes = plt.subplots(len(rows), 2, figsize=(PAGE, 2.75 * len(rows)), squeeze=False,
-                             gridspec_kw=dict(wspace=0.25, hspace=0.42, left=0.08, right=0.99,
-                                              top=0.86, bottom=0.08))
+    fig, axes = plt.subplots(1, 2 * len(rows), figsize=(PAGE, 2.35),
+                             gridspec_kw=dict(wspace=0.42, left=0.065, right=0.995,
+                                              top=0.76, bottom=0.17))
     letters = iter("abcd")
-    for (src, sim, win, t, name), (a1, a2) in zip(rows, axes):
+    for k, (src, sim, win, t, name) in enumerate(rows):
+        a1, a2 = axes[2 * k], axes[2 * k + 1]
         spread_panel(a1, prof, src, sim, win, t, args.min_kappa)
         qq_panel(a2, sc, src, sim, win, t)
         a1.set_title(f"({next(letters)}) {name}", loc="left", fontweight="bold", fontsize=FONT)
@@ -125,8 +126,8 @@ def main(args):
                        label="simulated zones ($H_0$), model"),
                 Line2D([], [], color=MUTED, ls=(0, (1, 2)), lw=0.9,
                        label="$\\mathcal{N}(0,1)$ (b, d)")]
-    fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False, fontsize=FONT,
-               handlelength=3.6, columnspacing=1.6, bbox_to_anchor=(0.5, 1.0))
+    fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False, fontsize=FONT - 1,
+               handlelength=3.4, columnspacing=2.0, bbox_to_anchor=(0.5, 1.01))
     fig.savefig(args.out)
 
 

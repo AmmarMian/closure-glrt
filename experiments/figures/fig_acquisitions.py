@@ -45,7 +45,7 @@ def main(args):
     ax1.vlines(s1, 0.05, 0.45, color=S1, lw=0.7)
     for label, idx in (("$t=10$", 10), ("$t=23$", 23)):
         ax1.vlines(acq[idx], 0.55, 0.95, color=SAMEDAY, lw=1.6)
-        ax1.text(acq[idx], 1.0, label, fontsize=6, ha="center", va="bottom", color=INK)
+        ax1.text(acq[idx], 1.0, label, fontsize=7, ha="center", va="bottom", color=INK)
     ax1.set_ylim(0, 1.35)
     ax1.set_yticks([0.75, 0.25], ["UAVSAR", "S1"])
     ax1.tick_params(axis="y", length=0)
