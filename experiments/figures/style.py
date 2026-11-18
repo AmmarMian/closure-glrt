@@ -55,8 +55,14 @@ def _truetype(otf):
 
 
 def style():
+    fm = font_manager.fontManager
     for f in FONT_DIR.glob("*.otf"):
-        font_manager.fontManager.addfont(str(_truetype(f)))
+        fm.addfont(str(_truetype(f)))
+    # keep only the TrueType copies (a system OpenType Termes would be embedded as CFF)
+    fm.ttflist = [e for e in fm.ttflist
+                  if not (e.name == "TeX Gyre Termes" and not e.fname.endswith(".ttf"))]
+    font_manager.findfont.cache_clear() if hasattr(font_manager.findfont, "cache_clear") \
+        else None
     plt.rcParams.update({
         "font.family": "serif", "font.serif": ["TeX Gyre Termes"], "mathtext.fontset": "cm",
         "axes.unicode_minus": True,
