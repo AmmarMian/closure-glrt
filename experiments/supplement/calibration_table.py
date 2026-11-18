@@ -43,7 +43,8 @@ def main(args):
         cells = []
         for seg in segs:
             v = [100 * float(r[f"share_{key}"]) for r in data[seg][0]]
-            cells.append(f"{min(v):.1f}--{max(v):.1f}")
+            lo, hi = f"{min(v):.1f}", f"{max(v):.1f}"
+            cells.append(lo if lo == hi else f"{lo}--{hi}")
         for seg in segs:
             v = [100 * float(r[f"share_{key}"]) for r in data[seg][1]]
             cells.append(f"{statistics.median(v):.1f}")
