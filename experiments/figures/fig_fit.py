@@ -20,88 +20,113 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import FuncFormatter, NullFormatter
+from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
 from scipy import stats
-from style import COLUMN, INK, MUTED, S1, SAMEDAY, UAVSAR, style
+from style import INK, MUTED, PAGE, style
 
-LAWS = (("vm_c", UAVSAR, "-", r"model $\hat c\kappa_{0,\ell}$"),
-        ("vm_free", SAMEDAY, "-.", r"free $\hat\kappa$, equal weights"),
-        ("vm_1", S1, "--", r"nominal $\kappa_{0,\ell}$ ($c=1$)"))
+# Colorblind-safe encoding: each law has its own line style and marker; colors only repeat it
+# (Okabe-Ito blue, vermillion, black), and every curve is labelled directly on the plot.
+BLUE, VERM = "#0072B2", "#D55E00"
+LAWS = {"vm_c": dict(color=BLUE, ls="-", lw=1.7, marker=None,
+                     text="model $\\hat c\\kappa_{0,\\ell}$"),
+        "vm_free": dict(color=VERM, ls="--", lw=1.4, marker="^",
+                        text="free concentration $\\hat\\kappa$, equal weights"),
+        "vm_1": dict(color=INK, ls=":", lw=1.6, marker="x", text="nominal looks ($c=1$)")}
+FONT = 8.5
+
+
+def label_at(ax, x, y, text, color, dx=1.08, dy=1.0, ha="left", va="center", log=True):
+    """Text next to the point (x, y) of a curve, in data coordinates."""
+    ax.text(x * dx if log else x + dx, y * dy if log else y + dy, text, color=color,
+            fontsize=FONT - 0.5, ha=ha, va=va)
 
 
 def spread_panel(ax, prof, src, sim, win, t, min_kappa):
-    """95 % quantile of |residual| per bin of kappa0: real and simulated points, three laws."""
+    """95 % quantile of |residual| per bin of kappa0: real and simulated points, model and c=1."""
     k = f"{src}|{win}|{t}"
     k0 = prof[f"{k}|kappa0"]
     keep = k0 >= min_kappa
-    for key, (law, col, ls, label) in zip(("q95_model", "q95_nominal"), (LAWS[0], LAWS[2])):
-        ax.plot(k0[keep], np.degrees(prof[f"{k}|{key}"][keep]), color=col, ls=ls, lw=0.9,
-                label=label)
-    for s, real in ((src, True), (sim, False)):
-        kk = f"{s}|{win}|{t}"
+    x = k0[keep]
+    for key, law, dy in (("q95_model", "vm_c", 1.25), ("q95_nominal", "vm_1", 0.8)):
+        st = LAWS[law]
+        y = np.degrees(prof[f"{k}|{key}"][keep])
+        ax.plot(x, y, color=st["color"], ls=st["ls"], lw=st["lw"])
+        if st["marker"]:
+            ax.plot(x[::3], y[::3], ls="none", marker=st["marker"], ms=4.5, color=st["color"],
+                    mfc="white", mew=0.9)
+    for s_, real in ((src, True), (sim, False)):
+        kk = f"{s_}|{win}|{t}"
         if f"{kk}|q95" not in prof:
             continue
-        x = prof[f"{kk}|kappa0"]
-        m = x >= min_kappa
-        ax.plot(x[m], np.degrees(prof[f"{kk}|q95"][m]), "o" if real else "s", ms=2.6,
-                color=INK, mfc=INK if real else "white", mew=0.6, ls="none",
-                label="real" if real else r"simulated $H_0$")
+        xs = prof[f"{kk}|kappa0"]
+        m = (xs >= min_kappa) & (xs <= 1.5 * x.max())     # range of the real cells
+        ax.plot(xs[m], np.degrees(prof[f"{kk}|q95"][m]), "o" if real else "s",
+                ms=4.2 if real else 4.6, color=INK, mfc=INK if real else "white", mew=0.9,
+                ls="none", zorder=3, label="real zones" if real else "simulated zones ($H_0$)")
     ax.set_xscale("log")
     ax.set_yscale("log")
+    ax.yaxis.set_major_locator(LogLocator(subs=(1, 2, 5)))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     ax.yaxis.set_minor_formatter(NullFormatter())
-    ax.set_xlabel(r"precision $\kappa_{0,\ell}$", labelpad=1)
-    ax.set_ylabel(r"95 % of $|\hat\Phi_\ell-\hat\mu|$ (deg)", labelpad=1)
+    ax.set_xlabel(r"precision $\kappa_{0,\ell}$ of the cell", fontsize=FONT)
+    ax.set_ylabel(r"95% quantile of $|\hat\Phi_\ell-\hat\mu|$ (deg)", fontsize=FONT)
 
 
-def qq_panel(ax, sc, src, sim, win, t):
+def qq_panel(ax, sc, src, sim, win, t, ylim=5.0):
     z = stats.norm.ppf(sc["probs"])
-    ax.plot([-4.5, 4.5], [-4.5, 4.5], color=MUTED, lw=0.6, ls=":")
-    for law, col, ls, label in LAWS:
+    ax.plot([-ylim, ylim], [-ylim, ylim], color=MUTED, lw=0.8, ls=(0, (1, 2)))
+    for law, st in LAWS.items():
         key = f"{src}|{win}|{t}|all|{law}"
-        if key in sc:
-            ax.plot(z, sc[key], color=col, ls=ls, lw=1.0, label=label)
+        if key not in sc:
+            continue
+        y = sc[key]
+        ax.plot(z, y, color=st["color"], ls=st["ls"], lw=st["lw"])
+        if st["marker"]:
+            ax.plot(z[::8], y[::8], ls="none", marker=st["marker"], ms=4.5, color=st["color"],
+                    mfc="white", mew=0.9)
     key = f"{sim}|{win}|{t}|all|vm_c"
     if key in sc:
-        ax.plot(z, sc[key], color=INK, ls="none", marker="s", ms=2.0, mfc="white", mew=0.5,
-                markevery=6)
-    ax.set_xlim(-4.2, 4.2)
-    ax.set_ylim(-6, 6)
-    ax.set_xlabel("standard normal quantile", labelpad=1)
-    ax.set_ylabel(r"quantile of the normal score", labelpad=1)
+        ax.plot(z[::6], sc[key][::6], ls="none", marker="s", ms=4.2, mfc="white", mew=0.8,
+                color=INK)
+    ax.set_xlim(-4.0, 4.0)
+    ax.set_ylim(-ylim, ylim)
+    ax.set_xlabel("standard normal quantile", fontsize=FONT)
+    ax.set_ylabel("quantile of the normal scores", fontsize=FONT)
 
 
 def main(args):
     style()
+    plt.rcParams.update({"xtick.labelsize": FONT - 0.5, "ytick.labelsize": FONT - 0.5})
     prof = np.load(Path(args.run) / "profiles.npz")
     sc = np.load(Path(args.run) / "scores.npz")
-    rows = [("uavsar", "sim_h0", args.window, args.triplet, "UAVSAR, $t=10$, 15×5")]
+    rows = [("uavsar", "sim_h0", args.window, args.triplet,
+             "UAVSAR")]
     if args.s1_triplet:
         rows.append(("sentinel1", "sim_h0_s1", args.s1_window, args.s1_triplet,
-                     "Sentinel-1, $t=65$, 2×4"))
-    fig, axes = plt.subplots(len(rows), 2, figsize=(COLUMN, 1.75 * len(rows) + 0.55),
-                             squeeze=False,
-                             gridspec_kw=dict(wspace=0.42, hspace=0.62, left=0.12, right=0.98,
-                                              top=0.95, bottom=0.2))
+                     "Sentinel-1"))
+    fig, axes = plt.subplots(len(rows), 2, figsize=(PAGE, 2.75 * len(rows)), squeeze=False,
+                             gridspec_kw=dict(wspace=0.25, hspace=0.42, left=0.08, right=0.99,
+                                              top=0.86, bottom=0.08))
     letters = iter("abcd")
     for (src, sim, win, t, name), (a1, a2) in zip(rows, axes):
         spread_panel(a1, prof, src, sim, win, t, args.min_kappa)
         qq_panel(a2, sc, src, sim, win, t)
-        a1.set_title(f"({next(letters)}) {name}", loc="left", fontweight="bold", pad=2,
-                     fontsize=6.5)
-        a2.set_title(f"({next(letters)}) normal scores", loc="left", fontweight="bold", pad=2,
-                     fontsize=6.5)
+        a1.set_title(f"({next(letters)}) {name}", loc="left", fontweight="bold", fontsize=FONT)
+        a2.set_title(f"({next(letters)}) {name}", loc="left", fontweight="bold", fontsize=FONT)
         for ax in (a1, a2):
+            ax.grid(color="#e4e3dd", lw=0.5)
             for sp in ("top", "right"):
                 ax.spines[sp].set_visible(False)
-    h1, l1 = axes[0, 0].get_legend_handles_labels()
-    h2, l2 = axes[0, 1].get_legend_handles_labels()
-    order = [l2.index(LAWS[0][3]), l2.index(LAWS[1][3]), l2.index(LAWS[2][3])]
-    pts = [i for i, lab in enumerate(l1) if lab in ("real", r"simulated $H_0$")]
-    fig.legend([h2[i] for i in order] + [h1[i] for i in pts],
-               [l2[i] for i in order] + [l1[i] for i in pts], loc="lower center",
-               ncol=2, frameon=False, fontsize=5.6, handlelength=2.0,
-               bbox_to_anchor=(0.5, 0.0))
+    from matplotlib.lines import Line2D
+    handles = [Line2D([], [], color=st["color"], ls=st["ls"], lw=st["lw"], marker=st["marker"],
+                      ms=5, mfc="white", mew=1.0, label=st["text"]) for st in LAWS.values()]
+    handles += [Line2D([], [], color=INK, ls="none", marker="o", ms=5, label="real zones"),
+                Line2D([], [], color=INK, ls="none", marker="s", ms=5, mfc="white",
+                       label="simulated zones ($H_0$), model"),
+                Line2D([], [], color=MUTED, ls=(0, (1, 2)), lw=0.9,
+                       label="$\\mathcal{N}(0,1)$ (b, d)")]
+    fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False, fontsize=FONT,
+               handlelength=3.6, columnspacing=1.6, bbox_to_anchor=(0.5, 1.0))
     fig.savefig(args.out)
 
 
