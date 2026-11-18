@@ -36,7 +36,7 @@ def read(run, window):
 def main(args):
     style()
     comp = read(args.competitors, args.window)
-    white = read(args.white, args.window)
+    white = read(args.white, args.window) if args.white else []
     fig, (a, b) = plt.subplots(2, 1, figsize=(COLUMN, 4.8), gridspec_kw={"hspace": 1.1})
     x = np.arange(len(CLASSES))
     for m, (lab, col, mk, ls) in TESTS.items():
@@ -45,8 +45,9 @@ def main(args):
         a.plot(x, y, color=col, marker=mk, ls=ls, lw=0.9, ms=3, label=lab)
     y = [next((float(r["reject"]) for r in white if r["method"] == "scale_free"
                and r["class"] == c and float(r["closure_deg"]) == 0), np.nan) for c in CLASSES]
-    a.plot(x, y, color=UAVSAR, marker="o", mfc="white", ls="none", ms=3.5,
-           label="scale-free (own), indep. pixels")
+    if white:
+        a.plot(x, y, color=UAVSAR, marker="o", mfc="white", ls="none", ms=3.5,
+               label="scale-free (own), indep. pixels")
     n = 2000
     band = 2 * np.sqrt(args.pfa * (1 - args.pfa) / n)
     a.axhspan(args.pfa - band, args.pfa + band, color=GRID, lw=0)
@@ -83,7 +84,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--competitors", required=True, help="coverage run with all the methods")
-    p.add_argument("--white", required=True, help="coverage run with independent pixels")
+    p.add_argument("--white", default=None, help="coverage run with independent pixels (optional)")
     p.add_argument("--window", default="15x5")
     p.add_argument("--power-class", default="0.7-0.9")
     p.add_argument("--pfa", type=float, default=0.01)

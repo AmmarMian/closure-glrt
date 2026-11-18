@@ -21,7 +21,7 @@ NAMES = {"scale_free": "Scale-free, own precisions",
          "bootstrap": "Bootstrap", "zwieback": "Zwieback (zone)", "yuan": "Yuan (zone)"}
 ARC_METHODS = ("scale_free", "scale_free_nb")   # intervals reported: the arc of the paper only
 SCEN = [("touching", "5x5", "Reference"),
-        ("white", "5x5", "Indep. pixels"), ("texture1", "5x5", r"Texture $\nu=1$"),
+        ("texture1", "5x5", r"Texture $\nu=1$"),
         ("texture4", "5x5", r"Texture $\nu=4$"), ("texture20", "5x5", r"Texture $\nu=20$"),
         ("mixed", "5x5", "Mixed coh."), ("ramp", "5x5", r"Ramp $\pm1^\circ$"),
         ("split", "5x5", r"Split $\pm1^\circ$"), ("split3", "5x5", r"Split $\pm3^\circ$"),
