@@ -37,7 +37,9 @@ def main(args):
     style()
     comp = read(args.competitors, args.window)
     white = read(args.white, args.window) if args.white else []
-    fig, (a, b) = plt.subplots(2, 1, figsize=(COLUMN, 4.8), gridspec_kw={"hspace": 1.1})
+    fig, (a, b) = plt.subplots(2, 1, figsize=(COLUMN, 4.1),
+                               gridspec_kw={"hspace": 0.55, "top": 0.79, "bottom": 0.1,
+                                            "left": 0.15, "right": 0.98})
     x = np.arange(len(CLASSES))
     for m, (lab, col, mk, ls) in TESTS.items():
         y = [next((float(r["reject"]) for r in comp if r["method"] == m and r["class"] == c
@@ -57,8 +59,9 @@ def main(args):
     a.set_xlabel(r"zone coherence $\bar\gamma$")
     a.set_ylabel("rejection rate under $H_0$")
     a.grid(color=GRID, lw=0.4)
-    a.legend(fontsize=7, ncol=2, frameon=False, loc="upper center",
-             bbox_to_anchor=(0.5, -0.32))
+    fig.legend(*a.get_legend_handles_labels(), fontsize=7, ncol=2, frameon=False,
+               loc="upper center", bbox_to_anchor=(0.55, 1.0), handlelength=2.2,
+               columnspacing=1.0)
     a.set_title("(a) false alarms", loc="left", fontweight="bold")
     closures = sorted({float(r["closure_deg"]) for r in comp})
     for m in ("scale_free", "scale_free_nb", "equal", "plugin"):
@@ -74,7 +77,6 @@ def main(args):
     b.set_xlabel(r"closure $\mu$ (deg)")
     b.set_ylabel("detection probability")
     b.grid(color=GRID, lw=0.4)
-    b.legend(fontsize=7, frameon=False, loc="upper left")
     b.set_title(f"(b) power, {args.power_class.replace('-', '$\\leq\\bar\\gamma<$')}",
                 loc="left", fontweight="bold")
     fig.savefig(args.out, bbox_inches="tight")
