@@ -78,7 +78,8 @@ def coverage_table(rows, window):
 GROUPS = [(None, ["touching"]),
           ("Speckle texture, step (a)", ["texture1", "texture4", "texture20"]),
           ("Coherence within the cell, step (b)", ["mixed"]),
-          ("Closure within the zone, step (b)", ["ramp", "split", "split3"]),
+          (r"Closure varying within the zone (cells at $\mu\pm\delta$), step (b)",
+           ["ramp", "split", "split3"]),
           ("Zone size, step (c)", ["zone3", "zone7"])]
 LIMITS = dict(reject=0.02, power=0.50, coverage=0.92)
 
