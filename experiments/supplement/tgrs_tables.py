@@ -1,8 +1,8 @@
 r"""LaTeX tables of the TGRS simulations (E1, E2) from the runs of ``coverage.py``.
 
-* ``coverage.tex``: per method, coverage of the 95% interval, median half-width and bias of the
-  estimate at closures 0, 2 and 5 deg, for the classes 0.5-0.7, 0.7-0.9 and >= 0.9 (touching
-  cells, one cell size);
+* ``coverage.tex``: for the arc with own and with neighbor precisions, coverage of the 95%
+  interval, median half-width and bias of the estimate at closures 0, 2 and 5 deg, for the
+  classes 0.5-0.7, 0.7-0.9 and >= 0.9 (touching cells, one cell size);
 * ``robustness.tex``: per scenario, false-alarm rate of the scale-free test (range over the
   classes >= 0.2 and class < 0.2), its power at 2 deg (class 0.7-0.9), and coverage and bias
   of the neighbor-precision interval at 2 deg (class 0.7-0.9).
@@ -19,7 +19,8 @@ NAMES = {"scale_free": "Scale-free, own precisions",
          "scale_free_nb": "Scale-free, neighbor prec.",
          "nominal": "Nominal looks", "plugin": "Plug-in ENL", "equal": "Equal weights",
          "bootstrap": "Bootstrap", "zwieback": "Zwieback (zone)", "yuan": "Yuan (zone)"}
-SCEN = [("touching", "5x5", "Reference"), ("independent", "5x5", "Indep. cells"),
+ARC_METHODS = ("scale_free", "scale_free_nb")   # intervals reported: the arc of the paper only
+SCEN = [("touching", "5x5", "Reference"),
         ("white", "5x5", "Indep. pixels"), ("texture1", "5x5", r"Texture $\nu=1$"),
         ("texture4", "5x5", r"Texture $\nu=4$"), ("texture20", "5x5", r"Texture $\nu=20$"),
         ("mixed", "5x5", "Mixed coh."), ("ramp", "5x5", r"Ramp $\pm1^\circ$"),
@@ -59,6 +60,8 @@ def coverage_table(rows, window):
                              ("mean_error_deg", lambda v: f"{float(v):+.2f}", "Bias (deg)")):
         out.append(r"\multicolumn{10}{@{}l}{\textit{" + title + r"}} \\")
         for m, name in NAMES.items():
+            if m not in ARC_METHODS:
+                continue
             cells = []
             for c in classes:
                 for mu in (0.0, 2.0, 5.0):
@@ -103,13 +106,16 @@ def compact_table(rows, window, mu=2.0):
            if r["window"] == window and float(r["closure_deg"]) == mu}
     classes = ("0.5-0.7", "0.7-0.9", "0.9-1.01")
     out = [r"\begin{tabular}{@{}lrrrrrr@{}}", r"\toprule",
-           r" & \multicolumn{2}{c}{$0.5\le\bar\gamma<0.7$} & \multicolumn{2}{c}{$0.7\le\bar\gamma<0.9$}"
+           r" & \multicolumn{2}{c}{$0.5\le\bar\gamma<0.7$}"
+           r" & \multicolumn{2}{c}{$0.7\le\bar\gamma<0.9$}"
            r" & \multicolumn{2}{c}{$\bar\gamma\ge0.9$} \\",
            r"Method & cov. & $h$ & cov. & $h$ & cov. & $h$ \\", r"\midrule"]
     short = {"scale_free": "Scale-free, own", "scale_free_nb": "Scale-free, neighbors",
              "nominal": "Nominal looks", "plugin": "Plug-in ENL", "equal": "Equal weights",
              "bootstrap": "Bootstrap", "zwieback": "Zwieback", "yuan": "Yuan"}
     for m, name in short.items():
+        if m not in ARC_METHODS:
+            continue
         cells = []
         for c in classes:
             r = sel.get((m, c))
