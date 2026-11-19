@@ -141,7 +141,7 @@ if __name__ == "__main__":
     p.add_argument("--run", required=True)
     p.add_argument("--triplet", type=int, default=10)
     p.add_argument("--window", default="15x5")
-    p.add_argument("--min-kappa", type=float, default=4.0,
+    p.add_argument("--min-kappa", type=float, default=1.0,
                    help="Bins of (a) with a smaller median kappa0 are left out.")
     p.add_argument("--s1-triplet", default=None, help="Sentinel-1 group of the run (row 2).")
     p.add_argument("--s1-window", default="2x4")
