@@ -5,7 +5,8 @@ per zone (equal weights) and the nominal number of looks ($c=1$).
 (a) Spread of the residuals $\hat\Phi_\ell-\hat\mu$ against the precision $\kappa_{0,\ell}$: in
 bins of $\kappa_{0,\ell}$, the 95 % quantile of $|\hat\Phi_\ell-\hat\mu|$ on real and simulated
 zones, with the quantile predicted by $\mathcal{VM}(0,\hat c\kappa_{0,\ell})$
-(the model) and by $\mathcal{VM}(0,\kappa_{0,\ell})$ (nominal looks). (b) QQ plot of the normal
+(the model), by $\mathcal{VM}(0,\hat\kappa)$ (free concentration of the zone) and by
+$\mathcal{VM}(0,\kappa_{0,\ell})$ (nominal looks). (b) QQ plot of the normal
 scores of all the cells of all the zones, under the model and with $c=1$, against the standard
 normal law.
 
@@ -47,7 +48,10 @@ def spread_panel(ax, prof, src, sim, win, t, min_kappa):
     k0 = prof[f"{k}|kappa0"]
     keep = k0 >= min_kappa
     x = k0[keep]
-    for key, law, dy in (("q95_model", "vm_c", 1.25), ("q95_nominal", "vm_1", 0.8)):
+    for key, law in (("q95_model", "vm_c"), ("q95_free_model", "vm_free"),
+                     ("q95_nominal", "vm_1")):
+        if f"{k}|{key}" not in prof:
+            continue
         st = LAWS[law]
         y = np.degrees(prof[f"{k}|{key}"][keep])
         ax.plot(x, y, color=st["color"], ls=st["ls"], lw=st["lw"])
