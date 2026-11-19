@@ -5,7 +5,8 @@ triplets, the same-day triplets labelled; (b) daily rain (mean of the GHCN stati
 volumetric soil moisture of the top 7 cm (ERA5).
 
 Input for now: the context store of the legacy run ``context-maps-s1`` (dates, weather series),
-until that experiment is ported. Output: a PDF.
+until that experiment is ported. Output: a PDF and, with ``--data``, the tables of the pgfplots
+version (``uavsar``, ``s1``, ``weather``; ISO dates) and ``labels.tex``.
 
 Example:
     python experiments/figures/fig_acquisitions.py --context <run>/context.zarr \
@@ -20,6 +21,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import zarr
+from pgfdata import write_dat, write_macros
 from style import COLUMN, GRID, INK, MUTED, S1, SAMEDAY, UAVSAR, panel_label, style
 
 
@@ -37,6 +39,12 @@ def main(args):
     sm = g["weather/sm0_7"][:]
     days = np.array([d0 + timedelta(days=int(i)) for i in range(len(rain))])
 
+    if args.data:
+        write_dat(args.data, "uavsar", date=[d.isoformat() for d in acq])
+        write_dat(args.data, "s1", date=[d.isoformat() for d in s1])
+        write_dat(args.data, "weather", date=[d.isoformat() for d in days], rain=rain, sm=sm)
+        write_macros(args.data, "labels", acqsamea=acq[10].isoformat(),
+                     acqsameb=acq[23].isoformat())
     fig = plt.figure(figsize=(COLUMN, 2.4))
     gs = fig.add_gridspec(3, 1, height_ratios=[0.8, 1, 1], hspace=0.2,
                           left=0.15, right=0.97, top=0.95, bottom=0.1)
@@ -80,4 +88,5 @@ if __name__ == "__main__":
     p.add_argument("--context", required=True)
     p.add_argument("--s1-triplets", required=True)
     p.add_argument("--out", default="acquisitions.pdf")
+    p.add_argument("--data", default=None, help="Folder of the pgfplots tables (optional).")
     main(p.parse_args())

@@ -21,6 +21,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from pgfdata import write_dat, write_macros
 from style import COLUMN, GRID, INK, MUTED, panel_label, style
 
 CLASS_COLORS = ("#6da7ec", "#184f95")   # ordinal blue ramp (two steps), validated on white
@@ -49,6 +50,7 @@ def main(args):
     t = np.array([int(r["triplet"]) for r in rows])
     sameday = np.array([r["date1"] == r["date2"] == r["date3"] for r in rows])
     classes = args.classes
+    series = {"t": t, "sameday": sameday.astype(int)}
 
     fig = plt.figure(figsize=(COLUMN, 3.6))
     outer = fig.add_gridspec(2, 1, height_ratios=[1.35, 1.75], hspace=0.38,
@@ -65,7 +67,11 @@ def main(args):
                       else np.nan for r in rows])
         lo, hi = c.split("-")
         label = rf"$\bar\gamma^\perp\in[{lo},{min(float(hi), 1):g}]$"
+        series["share_" + c.replace("-", "_").replace(".", "")] = y
         ax_s.plot(t, y, "-o", color=col, lw=0.9, ms=1.8, label=label, zorder=2)
+    write_dat(args.data, "series", **series)
+    write_dat(args.data, "sameday", lo=t[sameday] - 0.5, hi=t[sameday] + 0.5)
+    ymax = 1.08 * np.nanmax([v for k, v in series.items() if k.startswith("share_")])
     ax_s.set_ylim(0, None)
     ax_s.set_ylabel(r"Detected share $\rho_t$", labelpad=1)
     ax_s.legend(fontsize=7, frameon=False, loc="lower left", ncol=3, handlelength=1.5,
@@ -86,10 +92,20 @@ def main(args):
     y = np.arange(len(crops))
     lim = 1.08 * max(max(float(by[k, c]["frac_detected_pos"]), float(by[k, c]["frac_detected_neg"]))
                      for k in args.triplets for c in crops)
+    macros = {"seriespfa": f"{args.pfa:g}", "seriesymax": f"{ymax:.4f}",
+              "seriestmin": f"{t[0] - 0.7:g}", "seriestmax": f"{t[-1] + 0.7:g}"}
+    for c, letter in zip(classes, "ab"):
+        lo, hi = c.split("-")
+        macros[f"seriesclass{letter}"] = rf"$\bar\gamma^\perp\in[{lo},{min(float(hi), 1):g}]$"
     for j, k in enumerate(args.triplets):
         ax = fig.add_subplot(gs[j])
         pos = [float(by[k, c]["frac_detected_pos"]) for c in crops]
         neg = [float(by[k, c]["frac_detected_neg"]) for c in crops]
+        d = by[k, crops[0]]["dates"].split("/")
+        write_dat(args.data, f"crops_{'ab'[j]}", idx=y, crop=[SHORT.get(c, c) for c in crops],
+                  pos=pos, neg=neg)
+        macros[f"seriestitle{'ab'[j]}"] = (f"$t={k}$\\\\{d[0][2:]}, {d[1][5:]}, "
+                                             f"{d[2][5:]}")
         ax.barh(y, pos, height=0.72, color=POS, lw=0)
         ax.barh(y, [-v for v in neg], height=0.72, color=NEG, lw=0)
         ax.axvline(0, color=MUTED, lw=0.5)
@@ -104,6 +120,10 @@ def main(args):
         despine(ax)
         if j == 0:
             fig.text(0.01, ax.get_position().y1 + 0.012, "(b)", fontweight="bold", fontsize=7)
+    macros["seriesmax"] = f"{lim:.3f}"
+    macros["seriesytop"] = f"{len(crops) - 0.4:g}"
+    macros["seriesylast"] = f"{len(crops) - 1}"
+    write_macros(args.data, "labels", **macros)
     fig.text(0.59, 0.012, r"Share of zones detected with $\hat\mu<0$ (red) and $\hat\mu>0$ (blue)",
              ha="center", fontsize=7, color=INK)
     fig.savefig(args.out)
@@ -122,4 +142,5 @@ if __name__ == "__main__":
                    help="Triplets of a class with fewer zones are left out of (a).")
     p.add_argument("--pfa", type=float, default=0.01)
     p.add_argument("--out", default="series.pdf")
+    p.add_argument("--data", default=None, help="Folder of the pgfplots tables (optional).")
     main(p.parse_args())

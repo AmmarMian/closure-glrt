@@ -16,6 +16,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from pgfdata import write_dat
 from style import COLUMN, GRID, INK, MUTED, S1, SAMEDAY, UAVSAR, style
 
 TESTS = {"scale_free": ("scale-free (proposed, own)", UAVSAR, "o", "-"),
@@ -41,9 +42,11 @@ def main(args):
                                gridspec_kw={"hspace": 0.55, "top": 0.79, "bottom": 0.1,
                                             "left": 0.15, "right": 0.98})
     x = np.arange(len(CLASSES))
+    pfa_cols = {"cls": x, "label": [c.replace("-1.01", "-1") for c in CLASSES]}
     for m, (lab, col, mk, ls) in TESTS.items():
         y = [next((float(r["reject"]) for r in comp if r["method"] == m and r["class"] == c
                    and float(r["closure_deg"]) == 0), np.nan) for c in CLASSES]
+        pfa_cols[m] = y
         a.plot(x, y, color=col, marker=mk, ls=ls, lw=0.9, ms=3, label=lab)
     y = [next((float(r["reject"]) for r in white if r["method"] == "scale_free"
                and r["class"] == c and float(r["closure_deg"]) == 0), np.nan) for c in CLASSES]
@@ -53,6 +56,9 @@ def main(args):
     n = 2000
     band = 2 * np.sqrt(args.pfa * (1 - args.pfa) / n)
     a.axhspan(args.pfa - band, args.pfa + band, color=GRID, lw=0)
+    write_dat(args.data, "pfa", **pfa_cols)
+    write_dat(args.data, "band", x=[-0.5, len(CLASSES) - 0.5], pfa=[args.pfa] * 2,
+              lo=[args.pfa - band] * 2, hi=[args.pfa + band] * 2)
     a.axhline(args.pfa, color=INK, lw=0.6, ls=":")
     a.set_yscale("log")
     a.set_xticks(x, [c.replace("-1.01", "-1") for c in CLASSES])
@@ -64,14 +70,17 @@ def main(args):
                columnspacing=1.0)
     a.set_title("(a) false alarms", loc="left", fontweight="bold")
     closures = sorted({float(r["closure_deg"]) for r in comp})
+    power_cols = {"idx": np.arange(len(closures)), "closure": closures}
     for m in ("scale_free", "scale_free_nb", "equal", "plugin"):
         lab, col, mk, ls = TESTS[m]
         pts = [(mu, float(r["reject"])) for mu in closures for r in comp
                if r["method"] == m and r["class"] == args.power_class
                and float(r["closure_deg"]) == mu]
+        power_cols[m] = [next((p[1] for p in pts if p[0] == mu), np.nan) for mu in closures]
         if pts:                       # closures equally spaced, as in the coverage figure
             b.plot([closures.index(p[0]) for p in pts], [p[1] for p in pts], color=col, marker=mk,
                    ls=ls, lw=0.9, ms=3, label=lab)
+    write_dat(args.data, "power", **power_cols)
     b.set_xticks(range(len(closures)), [f"{v:g}" for v in closures])
     b.axhline(args.pfa, color=INK, lw=0.6, ls=":")
     b.set_xlabel(r"closure $\mu$ (deg)")
@@ -91,4 +100,6 @@ if __name__ == "__main__":
     p.add_argument("--power-class", default="0.7-0.9")
     p.add_argument("--pfa", type=float, default=0.01)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--data", type=Path, default=None,
+                   help="Folder of the pgfplots tables pfa, band, power (optional).")
     main(p.parse_args())

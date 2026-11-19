@@ -6,7 +6,10 @@ zone of (b, c); (b) UAVSAR L-band VV intensity of the zone; (c) Sentinel-1 C-ban
 the zone, three days earlier. (b) and (c) come from ``amplitude_crops.py``.
 
 Inputs: the context store of the legacy run ``context-maps-s1`` (map grid, footprints) until that
-experiment is ported, the raw Landsat C2 L2 tiles and the crops ``.npz``. Output: a PDF.
+experiment is ported, the raw Landsat C2 L2 tiles and the crops ``.npz``. Output: a PDF
+and, with ``--data``, the layers of the pgfplots version (``landsat.png``, ``uavsar.png``,
+``s1.png``), the outlines (``footprint.dat``, ``bursts.dat``, km) and ``labels.tex``
+(extents, dates, tracks).
 
 Example:
     python experiments/figures/fig_study_area.py --context <run>/context.zarr \
@@ -21,6 +24,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import zarr
 from matplotlib.patches import Rectangle
+from pgfdata import write_dat, write_macros
 from style import INK, PAGE, S1, UAVSAR, panel_label, style
 
 
@@ -90,6 +94,36 @@ def fmt_date(s):
     return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
 
 
+def export(folder, img, ext_km, geo, tracks, to_km, crops, cext, img_date):
+    """Layers and outlines of the pgfplots version (images: row 0 at the north)."""
+    from pathlib import Path
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    plt.imsave(folder / "landsat.png", np.clip(img, 0, 1))
+    for key in ("uavsar", "s1"):
+        v = 10 * np.log10(crops[key])
+        lo, hi = np.nanpercentile(v, [2, 98])
+        plt.imsave(folder / f"{key}.png", np.nan_to_num(v, nan=lo), cmap="gray", vmin=lo,
+                   vmax=hi)
+    fx, fy = to_km(geo["uavsar"]["footprint"])
+    write_dat(folder, "footprint", x=np.r_[fx, fx[:1]], y=np.r_[fy, fy[:1]])
+    bx, by = [], []
+    for poly in geo["s1_bursts"].values():
+        if poly["track"] in tracks:
+            x, y = to_km(poly["polygon"])
+            bx += [*x, x[0], np.nan]
+            by += [*y, y[0], np.nan]
+    write_dat(folder, "bursts", x=bx, y=by)
+    write_macros(folder, "labels",
+                 saxmin=f"{ext_km[0]:.4f}", saxmax=f"{ext_km[1]:.4f}",
+                 saymin=f"{ext_km[2]:.4f}", saymax=f"{ext_km[3]:.4f}",
+                 sabxmin=f"{cext[0] / 1e3:.4f}", sabxmax=f"{cext[1] / 1e3:.4f}",
+                 sabymin=f"{cext[2] / 1e3:.4f}", sabymax=f"{cext[3] / 1e3:.4f}",
+                 salandsat=img_date, satracks=", ".join(tracks),
+                 sauavsardate=fmt_date(str(crops["uavsar_date"]).split(",")[0]),
+                 sasdate=fmt_date(str(crops["s1_date"]).split(",")[0]))
+
+
 def main(args):
     style()
     g = zarr.open_group(args.context, mode="r")
@@ -113,6 +147,8 @@ def main(args):
     x, y, cres = crops["x"], crops["y"], float(crops["res"])
     cext = [x[0] - cres / 2, x[-1] + cres / 2, y[-1] - cres / 2, y[0] + cres / 2]
 
+    if args.data:
+        export(args.data, img, ext_km, geo, tracks, to_km, crops, cext, img_date)
     side = 4.25                                            # map height and width (in)
     fig = plt.figure(figsize=(PAGE, side + 0.35))
     left, bottom = 0.5 / PAGE, 0.3 / (side + 0.35)
@@ -174,4 +210,5 @@ if __name__ == "__main__":
                    help="Landsat product ids, mosaicked in order (the first one has priority).")
     p.add_argument("--crops", required=True, help="Output of amplitude_crops.py.")
     p.add_argument("--out", default="study_area.pdf")
+    p.add_argument("--data", default=None, help="Folder of the pgfplots layers (optional).")
     main(p.parse_args())

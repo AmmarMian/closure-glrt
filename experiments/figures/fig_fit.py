@@ -10,7 +10,9 @@ $\mathcal{VM}(0,\kappa_{0,\ell})$ (nominal looks). (b) QQ plot of the normal
 scores of all the cells of all the zones, under the model and with $c=1$, against the standard
 normal law.
 
-Input: the run directory of ``closure_fit.py``. Output: a PDF.
+Input: the run directory of ``closure_fit.py``. Output: a PDF and, with ``--data``, the tables of
+the pgfplots version (``spread_<sensor>``, ``real_<sensor>``, ``sim_<sensor>``, ``qq_<sensor>``,
+angles in degrees; sensor ``uavsar`` or ``s1``).
 
 Example:
     python experiments/figures/fig_fit.py --run <runs>/runs/<run_id> --out fit.pdf
@@ -22,6 +24,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+from pgfdata import write_dat
 from scipy import stats
 from style import INK, MUTED, PAGE, style
 
@@ -98,6 +101,32 @@ def qq_panel(ax, sc, src, sim, win, t, ylim=5.0):
     ax.set_ylabel("normal score quantile", fontsize=FONT)
 
 
+def export(folder, prof, sc, tag, src, sim, win, t, min_kappa):
+    """Tables of one sensor: predicted quantiles (spread_), real and simulated points of (a, c)
+    and QQ curves of (b, d)."""
+    k = f"{src}|{win}|{t}"
+    keep = prof[f"{k}|kappa0"] >= min_kappa
+    write_dat(folder, f"spread_{tag}", kappa0=prof[f"{k}|kappa0"][keep],
+              model=np.degrees(prof[f"{k}|q95_model"][keep]),
+              free=np.degrees(prof[f"{k}|q95_free_model"][keep]),
+              nominal=np.degrees(prof[f"{k}|q95_nominal"][keep]))
+    xmax = 1.5 * prof[f"{k}|kappa0"][keep].max()
+    for s_, name in ((src, "real"), (sim, "sim")):
+        kk = f"{s_}|{win}|{t}"
+        if f"{kk}|q95" not in prof:
+            continue
+        xs = prof[f"{kk}|kappa0"]
+        m = (xs >= min_kappa) & (xs <= xmax)
+        write_dat(folder, f"{name}_{tag}", kappa0=xs[m], q95=np.degrees(prof[f"{kk}|q95"][m]))
+    z = stats.norm.ppf(sc["probs"])
+    cols = {"z": z}
+    for law, name in (("vm_c", "model"), ("vm_free", "free"), ("vm_1", "nominal")):
+        cols[name] = sc[f"{src}|{win}|{t}|all|{law}"]
+    key = f"{sim}|{win}|{t}|all|vm_c"
+    cols["sim"] = sc[key] if key in sc else np.full_like(z, np.nan)
+    write_dat(folder, f"qq_{tag}", **cols)
+
+
 def main(args):
     style()
     plt.rcParams.update({"xtick.labelsize": FONT - 0.5, "ytick.labelsize": FONT - 0.5})
@@ -113,6 +142,9 @@ def main(args):
                                               top=0.76, bottom=0.17))
     letters = iter("abcd")
     for k, (src, sim, win, t, name) in enumerate(rows):
+        if args.data:
+            export(args.data, prof, sc, "uavsar" if src == "uavsar" else "s1", src, sim, win, t,
+                   args.min_kappa)
         a1, a2 = axes[2 * k], axes[2 * k + 1]
         spread_panel(a1, prof, src, sim, win, t, args.min_kappa)
         qq_panel(a2, sc, src, sim, win, t)
@@ -146,4 +178,5 @@ if __name__ == "__main__":
     p.add_argument("--s1-triplet", default=None, help="Sentinel-1 group of the run (row 2).")
     p.add_argument("--s1-window", default="2x4")
     p.add_argument("--out", default="fit.pdf")
+    p.add_argument("--data", default=None, help="Folder of the pgfplots tables (optional).")
     main(p.parse_args())

@@ -15,6 +15,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from pgfdata import write_dat
 from style import GRID, INK, PAGE, S1, UAVSAR, style
 
 METHODS = {
@@ -41,6 +42,7 @@ def main(args):
     rows = read(args.runs, args.window)
     closures = sorted({k[2] for k in rows})
     xs = np.arange(len(closures))
+    tables = {}
     fig, axes = plt.subplots(2, 3, figsize=(PAGE, 3.3), sharex=True, sharey="row")
     for j, c in enumerate(CLASSES):
         for m, (lab, col, mk, ls) in METHODS.items():
@@ -53,6 +55,9 @@ def main(args):
             se = np.array([float(p[1]["rmse_deg"]) / np.sqrt(float(p[1]["zones"])) for p in pts])
             mu = np.array([closures[k] for k in i])
             pos = mu > 0
+            tables[(m, c)] = dict(idx=i, closure=mu, coverage=cov,
+                                  bias=np.where(pos, 100 * bias / np.where(pos, mu, 1), np.nan),
+                                  err=np.where(pos, 200 * se / np.where(pos, mu, 1), np.nan))
             kw = dict(color=col, marker=mk, ls=ls, lw=0.9, ms=3, label=lab)
             axes[0, j].plot(i, cov, **kw)
             off = -0.08 if m == "scale_free" else 0.08            # side by side error bars
@@ -77,6 +82,9 @@ def main(args):
     axes[1, 0].set_ylim(-45, 45)
     for a in axes.ravel():
         a.set_xlim(-0.5, len(closures) - 0.5)
+    for (m, c), cols in tables.items():
+        write_dat(args.data, f"{m}_{c.replace('-1.01', '-1')}", **cols)
+    write_dat(args.data, "closures", idx=xs, closure=closures)
     h, lab = axes[0, 0].get_legend_handles_labels()
     fig.legend(h, lab, loc="lower center", ncol=2, frameon=False, fontsize=7,
                bbox_to_anchor=(0.5, -0.01))
@@ -90,4 +98,6 @@ if __name__ == "__main__":
     p.add_argument("--runs", nargs="+", required=True)
     p.add_argument("--window", default="15x5")
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--data", type=Path, default=None,
+                   help="Folder of the pgfplots tables <method>_<class> (optional).")
     main(p.parse_args())
