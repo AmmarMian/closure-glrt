@@ -227,6 +227,59 @@ def confidence_halfwidth(phi: Array, weights: Array, alpha: float = 0.05,
     return be.where(target <= 0, be.full_like(h, np.pi), h)
 
 
+def glrt_at_closure(phi, gammas, n_looks: int, mu0) -> np.ndarray:
+    r"""Scale-free statistic of $\mu=\mu_0$ with the precisions of a closure $\mu_0$ (numpy).
+
+    The closures are rotated by $-\mu_0$ and weighted by
+    $1/\sigma^2(\gamma_\ell,\mu_0;N)$ (eq. var-closure), the precision of cell $\ell$ when its
+    closure is $\mu_0$. ``phi`` ``(Z, L)``, ``gammas`` ``(Z, L, 3)``, ``mu0`` ``(Z,)``. At
+    $\mu_0=0$ it is :func:`glrt` with $\kappa_0$.
+    """
+    from closure_glrt.closure import dezan_concentration
+    mu0 = np.asarray(mu0, dtype=np.float64)
+    w = dezan_concentration(gammas[..., 0], gammas[..., 1], gammas[..., 2], n_looks,
+                            closure=np.broadcast_to(mu0[..., None], phi.shape))
+    return glrt(np.angle(np.exp(1j * (phi - mu0[..., None]))), w)
+
+
+def tested_closure_arc(phi, gammas, n_looks: int, center, alpha: float = 0.05,
+                       n_grid: int = 96, n_bisect: int = 30):
+    r"""$1-\alpha$ confidence set of $\mu$ from :func:`glrt_at_closure` (numpy).
+
+    Every tested $\mu_0$ uses the precisions of a closure $\mu_0$, so the edges have no closed
+    form. From ``center`` (Z,), each side is scanned on a geometric grid of offsets up to $\pi$;
+    the edge is the first offset whose statistic exceeds the threshold, refined by bisection.
+    Returns the offsets ``(lower, upper)`` (rad, the set is $[c-\mathrm{lower},
+    c+\mathrm{upper}]$); both are $\pi$ when no tested value is rejected on that side.
+    """
+    phi = np.asarray(phi, dtype=np.float64)
+    center = np.asarray(center, dtype=np.float64)
+    eta = threshold(phi.shape[-1], alpha)
+    grid = np.geomspace(1e-4, np.pi, n_grid)
+    out = []
+    for sign in (-1.0, 1.0):
+        lo = np.zeros_like(center)
+        hi = np.full_like(center, np.pi)
+        found = np.zeros(center.shape, bool)
+        prev = np.zeros_like(center)
+        for t in grid:
+            lam = glrt_at_closure(phi, gammas, n_looks, center + sign * t)
+            new = ~found & (lam > eta)
+            lo[new], hi[new] = prev[new], t
+            found |= new
+            prev = np.where(found, prev, t)
+            if found.all():
+                break
+        for _ in range(n_bisect):
+            mid = 0.5 * (lo + hi)
+            lam = glrt_at_closure(phi, gammas, n_looks, center + sign * mid)
+            rej = lam > eta
+            hi = np.where(found & rej, mid, hi)
+            lo = np.where(found & ~rej, mid, lo)
+        out.append(np.where(found, 0.5 * (lo + hi), np.pi))
+    return out[0], out[1]
+
+
 def known_scale_halfwidth(phi: Array, weights: Array, scale: float = 1.0, alpha: float = 0.05,
                           backend_name: Union[str, Backend] = "numpy") -> Array:
     r"""Half-width of the $1-\alpha$ arc obtained by inverting :func:`glrt_known_scale`.

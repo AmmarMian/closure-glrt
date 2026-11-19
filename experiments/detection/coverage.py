@@ -24,7 +24,14 @@ x classes of the zone coherence x cell sizes ``--factors``. Methods (centre, hal
 * ``nominal``, ``plugin``: same centre, arc of $2c(R-C)$ with $c=1$ and $c=1/A$ ($\chi^2_1$);
 * ``equal``: unweighted circular mean, arc of the scale-free statistic with unit weights;
 * ``bootstrap``: weighted circular mean, percentile half-width of ``--boot`` resamplings of the
-  cells of the zone (no test).
+  cells of the zone (no test);
+* ``scale_free_mu``, ``scale_free_nb_mu``: same test and centre as ``scale_free`` and
+  ``scale_free_nb``, but each tested closure $\mu_0$ of the arc uses the precisions of a closure
+  $\mu_0$, $1/\sigma^2(\gamma,\mu_0;N)$ (own or neighbor coherences); the arc has no closed
+  form, its coverage is the share of zones where $\mu$ itself is not rejected, and its half-width
+  the mean of its two sides;
+* ``oracle_mu``: test of 0 and closed-form arc with the own precisions at the true closure
+  (reference: what precisions at the true closure would give the test).
 
 Outputs (run directory): ``coverage.csv`` (scenario, window, zone, class, closure_deg, zones,
 method, reject, coverage, median_halfwidth_deg, mean_error_deg, median_error_deg, rmse_deg)
@@ -48,13 +55,20 @@ from pfa_power import real_zones  # same directory
 from scipy import stats
 
 from closure_glrt import cli
-from closure_glrt.closure import neighbor_concentration, triplet_quantities
+from closure_glrt.closure import (
+    cell_coherences,
+    dezan_concentration,
+    neighbor_coherences,
+    triplet_quantities,
+)
 from closure_glrt.competitors import YuanLUT, yuan_zone, zone_multilook, zwieback_zone
 from closure_glrt.glrt import (
     confidence_halfwidth,
     glrt,
+    glrt_at_closure,
     glrt_known_scale,
     known_scale_halfwidth,
+    tested_closure_arc,
     threshold,
 )
 from closure_glrt.provenance import finish_run, start_run
@@ -67,7 +81,7 @@ from closure_glrt.simulation import (
 
 logger = logging.getLogger(__name__)
 METHODS = ("scale_free", "scale_free_nb", "nominal", "plugin", "equal", "bootstrap", "zwieback",
-           "yuan")
+           "yuan", "scale_free_mu", "scale_free_nb_mu", "oracle_mu")
 SCENARIOS = ("touching", "independent", "white", "texture", "mixed", "ramp", "split")
 
 
@@ -134,9 +148,11 @@ def bootstrap_halfwidth(phi, w, mu_hat, rng, n_boot, alpha):
 
 def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L, zone, lut=None, enl_zone=None):
     phi, kappa, _ = (x[..., 0] for x in triplet_quantities(lz, n_looks))
-    knb = neighbor_concentration(lz, n_looks, zone)
+    g_own = cell_coherences(lz)
+    g_nb = neighbor_coherences(lz, zone)
+    knb = dezan_concentration(g_nb[..., 0], g_nb[..., 1], g_nb[..., 2], n_looks)
     ok = np.isfinite(phi).all(-1) & np.isfinite(knb).all(-1) & (knb > 0).all(-1)
-    phi, kappa, knb = phi[ok], kappa[ok], knb[ok]
+    phi, kappa, knb, g_own, g_nb = phi[ok], kappa[ok], knb[ok], g_own[ok], g_nb[ok]
     pz, g12, g23, g13 = zone_multilook(lz[ok])
     eta, chi = threshold(L, args.pfa), stats.chi2.ppf(1 - args.pfa, 1)
     r = glrt(phi, kappa, details=True)
@@ -155,6 +171,17 @@ def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L, zone, lut=None, enl_zone
         "bootstrap": (np.full(len(phi), np.nan), mu_w,
                       bootstrap_halfwidth(phi, kappa, mu_w, rng, args.boot, args.alpha)),
     }
+    # arcs whose tested closures use the precisions of that closure (eq. var-closure)
+    mu_t = np.full(len(phi), mu_true)
+    cov = {}
+    for m, gg, base, center in (("scale_free_mu", g_own, "scale_free", mu_w),
+                                ("scale_free_nb_mu", g_nb, "scale_free_nb", rn["mu"])):
+        lo, hi = tested_closure_arc(phi, gg, n_looks, center, args.alpha)
+        cov[m] = glrt_at_closure(phi, gg, n_looks, mu_t) <= threshold(L, args.alpha)
+        res[m] = (res[base][0], center, 0.5 * (lo + hi))
+    k1 = dezan_concentration(g_own[..., 0], g_own[..., 1], g_own[..., 2], n_looks, closure=mu_true)
+    ro = glrt(phi, k1, details=True)
+    res["oracle_mu"] = (ro["lam"] > eta, ro["mu"], confidence_halfwidth(phi, k1, args.alpha))
     zw, zw_hw = zwieback_zone(pz, g12, g23, g13, n_looks * L, args.alpha)
     res["zwieback"] = (zw > chi, pz, zw_hw)
     if lut is not None:
@@ -165,7 +192,7 @@ def evaluate(lz, n_looks, c_eff, mu_true, args, rng, L, zone, lut=None, enl_zone
         err = wrap(mu - mu_true)
         rej_rate = float(np.nanmean(rej)) if m != "bootstrap" else ""
         out[m] = {"zones": int(len(phi)), "reject": rej_rate,
-                  "coverage": float(np.mean(np.abs(err) <= hw)),
+                  "coverage": float(np.mean(cov[m] if m in cov else np.abs(err) <= hw)),
                   "median_halfwidth_deg": float(np.degrees(np.median(hw))),
                   "mean_error_deg": float(np.degrees(np.mean(err))),
                   "median_error_deg": float(np.degrees(np.median(err))),

@@ -80,3 +80,31 @@ def test_zone_multilook_closure_and_wald():
     phi, g12, g23, g13 = zone_multilook(lz)
     stat = zwieback_zone(phi, g12, g23, g13, 25 * 75)
     assert abs(np.mean(stat > stats.chi2.ppf(0.95, 1)) - 0.05) < 0.04
+
+
+def test_glrt_at_closure_zero_is_glrt():
+    from closure_glrt.closure import dezan_concentration
+    from closure_glrt.glrt import glrt, glrt_at_closure
+    rng = np.random.default_rng(3)
+    g = rng.uniform(0.4, 0.95, size=(50, 25, 3))
+    phi = rng.normal(0, 0.05, size=(50, 25))
+    k0 = dezan_concentration(g[..., 0], g[..., 1], g[..., 2], 75)
+    np.testing.assert_allclose(glrt_at_closure(phi, g, 75, np.zeros(50)), glrt(phi, k0),
+                               rtol=1e-10, atol=1e-12)
+
+
+def test_tested_closure_arc_equal_coherences_is_closed_form():
+    # equal coherences in a zone: the precisions at mu0 are a common factor, which the
+    # scale-free statistic ignores, so the arc is the closed-form one of confidence_halfwidth
+    from closure_glrt.closure import dezan_concentration
+    from closure_glrt.glrt import confidence_halfwidth, glrt, tested_closure_arc
+    rng = np.random.default_rng(4)
+    Z, L = 40, 25
+    g = np.repeat(rng.uniform(0.5, 0.9, size=(Z, 1, 3)), L, axis=1)
+    phi = 0.03 + rng.normal(0, 0.02, size=(Z, L))
+    k0 = dezan_concentration(g[..., 0], g[..., 1], g[..., 2], 75)
+    mu = glrt(phi, k0, details=True)["mu"]
+    lo, hi = tested_closure_arc(phi, g, 75, mu, alpha=0.05)
+    h = confidence_halfwidth(phi, k0, alpha=0.05)
+    np.testing.assert_allclose(lo, h, rtol=1e-6)
+    np.testing.assert_allclose(hi, h, rtol=1e-6)

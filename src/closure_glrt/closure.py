@@ -171,20 +171,25 @@ def tile_zones(x: Array, zone: tuple[int, int], backend_name: Union[str, Backend
     return y.reshape(I, J, za * zb, *x.shape[2:])
 
 
-def neighbor_concentration(lags, n_looks: int, zone: tuple[int, int]) -> np.ndarray:
-    r"""Precision of every cell from the coherences of its neighbors in the zone (numpy).
+def cell_coherences(lags) -> np.ndarray:
+    r"""Sample coherence magnitudes $(\gamma_{12},\gamma_{23},\gamma_{13})$ of every cell (numpy).
 
-    ``lags`` ``(..., L, 3, 3)`` (one triplet, scan layout, cells of a zone in row-major order of
-    ``zone``). The three sample coherence magnitudes of each cell are replaced by their mean over
-    the (up to 8) adjacent cells of the zone, the cell itself excluded, before De Zan's precision
-    is computed. The weights then do not depend on the speckle of the cell, whose closure they
-    weight, which removes the bias of the weighted mean towards 0 when the closure is not 0.
+    ``lags`` ``(..., L, 3, 3)`` (one triplet, scan layout) gives ``(..., L, 3)``.
     """
     lags = np.asarray(lags)
     P = lags[..., 0].real
-    g = np.stack([np.abs(lags[..., 0, 1]) / np.sqrt(P[..., 0] * P[..., 1]),
-                  np.abs(lags[..., 1, 1]) / np.sqrt(P[..., 1] * P[..., 2]),
-                  np.abs(lags[..., 0, 2]) / np.sqrt(P[..., 0] * P[..., 2])], -1)   # (..., L, 3)
+    return np.stack([np.abs(lags[..., 0, 1]) / np.sqrt(P[..., 0] * P[..., 1]),
+                     np.abs(lags[..., 1, 1]) / np.sqrt(P[..., 1] * P[..., 2]),
+                     np.abs(lags[..., 0, 2]) / np.sqrt(P[..., 0] * P[..., 2])], -1)
+
+
+def neighbor_coherences(lags, zone: tuple[int, int]) -> np.ndarray:
+    r"""Mean coherences of the (up to 8) cells adjacent to every cell of the zone, itself excluded.
+
+    ``lags`` ``(..., L, 3, 3)`` (cells of a zone in row-major order of ``zone``) gives
+    ``(..., L, 3)``.
+    """
+    g = cell_coherences(lags)
     za, zb = zone
     grid = g.reshape(g.shape[:-2] + (za, zb, 3))
     pad = np.pad(grid, [(0, 0)] * (grid.ndim - 3) + [(1, 1), (1, 1), (0, 0)])
@@ -197,5 +202,17 @@ def neighbor_concentration(lags, n_looks: int, zone: tuple[int, int]) -> np.ndar
                 continue
             tot += pad[..., 1 + di:1 + di + za, 1 + dj:1 + dj + zb, :]
             cnt += one[1 + di:1 + di + za, 1 + dj:1 + dj + zb]
-    gn = (tot / cnt[..., None]).reshape(g.shape)
+    return (tot / cnt[..., None]).reshape(g.shape)
+
+
+def neighbor_concentration(lags, n_looks: int, zone: tuple[int, int]) -> np.ndarray:
+    r"""Precision of every cell from the coherences of its neighbors in the zone (numpy).
+
+    ``lags`` ``(..., L, 3, 3)`` (one triplet, scan layout, cells of a zone in row-major order of
+    ``zone``). The three sample coherence magnitudes of each cell are replaced by their mean over
+    the (up to 8) adjacent cells of the zone, the cell itself excluded, before De Zan's precision
+    is computed. The weights then do not depend on the speckle of the cell, whose closure they
+    weight, which removes the bias of the weighted mean towards 0 when the closure is not 0.
+    """
+    gn = neighbor_coherences(lags, zone)
     return dezan_concentration(gn[..., 0], gn[..., 1], gn[..., 2], n_looks)
