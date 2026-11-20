@@ -1,6 +1,8 @@
 r"""Coverage figure of the TGRS paper (two columns): coverage of the 95% arc (top) and bias of the
 estimate of the closure in percent of the closure (bottom) against the true closure, per class of
-zone coherence, for the arc with own and with neighbor precisions. The bias is shown at every
+zone coherence, for the arc with own and with neighbor precisions, and (when the runs have it) for
+the arc with neighbor precisions evaluated at each tested closure (method ``scale_free_nb_mu``,
+coverage only, since its estimate is that of ``scale_free_nb``). Later runs override earlier ones. The bias is shown at every
 nonzero closure with its 2-sigma Monte Carlo error (rmse / sqrt(zones)).
 
 Input: run directories of ``experiments/detection/coverage.py`` (scenario touching). Output: a PDF.
@@ -16,12 +18,15 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from pgfdata import write_dat
-from style import GRID, INK, PAGE, S1, UAVSAR, style
+from style import GRID, INK, PAGE, S1, SAMEDAY, UAVSAR, style
 
 METHODS = {
     "scale_free": (r"own precisions $\kappa_{0,\ell}$", S1, "s", "--"),
     "scale_free_nb": (r"neighbor precisions $\tilde\kappa_{0,\ell}$", UAVSAR, "o", "-"),
+    "scale_free_nb_mu": (r"neighbor precisions at the tested closure", SAMEDAY, "^", ":"),
 }
+# same estimate as scale_free_nb (only the arc differs): coverage panels only
+COVERAGE_ONLY = ("scale_free_nb_mu",)
 CLASSES = ("0.5-0.7", "0.7-0.9", "0.9-1.01")
 LABELS = {"0.5-0.7": r"$0.5\leq\bar\gamma<0.7$", "0.7-0.9": r"$0.7\leq\bar\gamma<0.9$",
           "0.9-1.01": r"$\bar\gamma\geq0.9$"}
@@ -60,6 +65,8 @@ def main(args):
                                   err=np.where(pos, 200 * se / np.where(pos, mu, 1), np.nan))
             kw = dict(color=col, marker=mk, ls=ls, lw=0.9, ms=3, label=lab)
             axes[0, j].plot(i, cov, **kw)
+            if m in COVERAGE_ONLY:
+                continue
             off = -0.08 if m == "scale_free" else 0.08            # side by side error bars
             axes[1, j].errorbar(i[pos] + off, 100 * bias[pos] / mu[pos],
                                 yerr=200 * se[pos] / mu[pos], capsize=1.5, elinewidth=0.6, **kw)
