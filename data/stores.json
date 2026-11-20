@@ -29,7 +29,9 @@
     "dtype": "float32",
     "sha256": "f6e165fdd5a2302a675a94877ffb34aba0276d126f2217055ceef5d0d3140d19"
    }
-  }
+  },
+  "vv_rebuild_run": "20261120T1920_uavsar-scan-s1_8520f87",
+  "vv_rebuild_note": "rebuilt VV only with experiments/stores/uavsar_scan.py at commit 8520f87 (58 min, 24 threads, on the machine holding the SLCs); content hashes identical to the source run"
  },
  "uavsar-scan-s2": {
   "source_run": "20261027T0843_scan-sdelta-s2_724e285",
@@ -61,6 +63,8 @@
     "dtype": "float32",
     "sha256": "8035db7ee85efe9f3587e221828d8d51d6b3f56d68598655cf0fe2bfdd91cff1"
    }
-  }
+  },
+  "vv_rebuild_run": "20261120T2022_uavsar-scan-s2_8520f87",
+  "vv_rebuild_note": "rebuilt VV only with experiments/stores/uavsar_scan.py at commit 8520f87 (70 min, 24 threads, on the machine holding the SLCs); content hashes identical to the source run"
  }
 }

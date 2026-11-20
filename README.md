@@ -77,7 +77,7 @@ simulations of the paper run on GPU this way, the real-data scans on CPU.
 > **The data are very heavy.** Reproducing everything from scratch means downloading about
 > **2.2 TB** of UAVSAR SLCs (1.1 TB per segment, three polarisations; VV alone is about a
 > third) and 433 Sentinel-1 OPERA CSLC bursts, then scanning them for hours on a machine with
-> fast disk access. The intermediate stores we built take 51 GB (UAVSAR s1), 54 GB (s2),
+> fast disk access. The intermediate stores take 17 GB (UAVSAR s1, VV), 18 GB (s2),
 > 31 GB (Sentinel-1 burst scan) and 5 GB (matched Sentinel-1 triplets); the ancillary data
 > 4.5 GB (3.9 GB of Landsat); every run directory of the paper 5.3 GB. The simulations of
 > Sec. VI only need the UAVSAR s1 store and the speckle spectrum; most figures can be redrawn
@@ -118,7 +118,9 @@ Stage 2, by section of the paper:
 chunking, codec and zarr version) and compares it with the hashes of our stores in
 `data/stores.json`. The cell sums are accumulated in complex128 in a fixed order, so a rebuild
 from the same SLCs gives identical numbers. The scan reads every SLC once (about 1.1 TB per
-segment; 92 and 192 minutes on a NAS with 12 threads).
+segment; about 1 h per segment with 24 threads on the machine that holds the SLCs). We rebuilt
+both UAVSAR stores (VV only) with this code: their content hashes equal those of the stores of
+the paper (runs in `data/stores.json`).
 
 ## Figures of the paper
 
