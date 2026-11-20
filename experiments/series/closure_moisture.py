@@ -1,6 +1,6 @@
-r"""Closure by crop against the change of soil moisture over all the triplets (TGRS plan, E6).
+r"""Closure by crop against the change of soil moisture over all the triplets (Sec. VII-E).
 
-Pre-specified analysis (docs/tgrs-plan.md, E6, committed before any result): the unit is a
+Pre-specified analysis (written down before any result was computed): the unit is a
 (crop, triplet) pair of a ``closure_landcover.py`` run made on all the triplets; the response is
 the median signed closure of the zones of the crop (``--response``); the predictors are computed
 from the ERA5 soil moisture of the top 7 cm at the three acquisition times, $m_1, m_2, m_3$:

@@ -5,13 +5,23 @@ build-backend = "hatchling.build"
 [project]
 name = "closure-glrt"
 version = "0.1.0"
-description = "Scale-free GLRT for InSAR closure phases with heterogeneous per-cell precision."
+description = "Confidence intervals on the InSAR closure phase without the number of looks (scale-free GLRT)."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Robin Dussaud" },
+    { name = "Ammar Mian" },
+    { name = "Nicolas Le Bihan" },
+]
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
-    "torch>=2.15.0",   # closure_glrt.backend (copied from HDR) imports torch; complex64 on MPS needs 2.15
+    # macOS: complex64 on MPS needs 2.15. Linux: CUDA 12.6 wheels (index below), whose last
+    # release is 2.14.1, the version of the paper's runs (driver >= 525 is enough).
+    "torch>=2.15.0; sys_platform == 'darwin'",
+    "torch>=2.14.1; sys_platform != 'darwin'",
     "zarr>=3",         # stores
 ]
 
@@ -19,12 +29,21 @@ dependencies = [
 cupy = ["cupy-cuda12x>=13"]
 jax = ["jax>=0.4", "jaxlib>=0.4"]
 io = ["h5py>=3.10"]    # OPERA CSLC reader
+geo = ["rasterio>=1.4", "pyproj>=3.6"]   # ancillary data, crop maps, map projections
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
 figures = [
     "matplotlib>=3.11.2",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/closure_glrt"]
@@ -35,6 +54,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+ignore = ["E741"]   # I, J, L: names of the paper
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

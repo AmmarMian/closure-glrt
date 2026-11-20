@@ -55,7 +55,8 @@ def crop(gr, bbox, window):
 def load_triplets(path, segment):
     with open(path) as f:
         rows = csv.DictReader(line for line in f if not line.startswith("#"))
-        return [(r["track"], r["d1"], r["d2"], r["d3"]) for r in rows if int(r["segment"]) == segment]
+        return [(r["track"], r["d1"], r["d2"], r["d3"]) for r in rows
+                if int(r["segment"]) == segment]
 
 
 def main(args):
@@ -88,7 +89,8 @@ def main(args):
     root = zarr.open_group(store_path, mode="w")
     root.attrs.update({"window": [r, c], "bbox": list(bbox), "segment": args.segment,
                        "run_id": run.run_id,
-                       "cov": "[P1, P2, P3, L12, L23, L13], L_ab = mean x_a conj(x_b) over the cell"})
+                       "cov": "[P1, P2, P3, L12, L23, L13], "
+                              "L_ab = mean x_a conj(x_b) over the cell"})
     t_start = time.time()
     for n, (track, dates, b, gr, (r0, r1, c0, c1), files) in enumerate(jobs):
         X = np.empty((r1 - r0, c1 - c0, 3), np.complex64)

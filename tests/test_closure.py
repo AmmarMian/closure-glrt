@@ -15,7 +15,7 @@ from closure_glrt.simulation import coherence_matrix, simulate_cells
 
 
 def _on(x, backend_name, dtype):
-    """numpy complex128 -> backend array of complex ``dtype`` (the HDR way: move, then cast)."""
+    """numpy complex128 -> backend array of complex ``dtype`` (move, then cast)."""
     return to_dtype(get_data_on_device(x, backend_name), np.dtype(dtype), backend_name)
 
 
@@ -30,7 +30,8 @@ def test_population_closure():
 
 @pytest.mark.parametrize("backend_name,dtype", BACKEND_DTYPE_PARAMS)
 def test_closure_backend_and_gauge(backend_name, dtype):
-    """Same closures as numpy complex128 on every backend; dtype follows the data; gauge invariant."""
+    """Same closures as numpy complex128 on every backend; dtype follows the data; gauge
+    invariant."""
     rng = np.random.default_rng(0)
     X = rng.standard_normal((200, 50, 3)) + 1j * rng.standard_normal((200, 50, 3))
     ref = closure_phase(sample_coherence_matrix(X))
@@ -41,7 +42,8 @@ def test_closure_backend_and_gauge(backend_name, dtype):
     assert str(phi.dtype).endswith("float32" if dtype == "complex64" else "float64")
     assert np.allclose(to_numpy(phi), ref, atol=50 * _tol(dtype))
     gauge = _on(np.exp(1j * np.array([0.3, -1.2, 2.0])), backend_name, dtype)
-    phig = closure_phase(sample_coherence_matrix(Xb * gauge, backend_name), backend_name=backend_name)
+    phig = closure_phase(sample_coherence_matrix(Xb * gauge, backend_name),
+                         backend_name=backend_name)
     assert np.allclose(to_numpy(phig), to_numpy(phi), atol=50 * _tol(dtype))
 
 
@@ -84,7 +86,9 @@ def test_lag_covariance_and_triplets(backend_name, dtype):
 
 
 def test_lag_covariance_matches_store_convention():
-    """Bitwise equal to the formula that built the paper's stores (complex64 products, complex128 sums)."""
+    """Bitwise equal to the formula that built the paper's stores (complex64 products, complex128
+    sums).
+    """
     from closure_glrt.io.uavsar import strip_statistics
 
     rng = np.random.default_rng(9)

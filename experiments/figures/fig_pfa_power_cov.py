@@ -3,7 +3,9 @@ r"""False alarm and power of the tests (TGRS paper, one column), from the runs o
 (a) Rejection rate under $H_0$ per class of zone coherence: scale-free test with neighbor
 precisions (touching cells, and independent pixels), with own precisions, equal weights, plug-in
 ENL, nominal looks, Zwieback and Yuan, log scale, nominal rate and Monte Carlo band.
-(b) Detection probability against the closure for $0.7\le\bar\gamma<0.9$ of the calibrated tests.
+(b) Detection probability against the closure for $0.7\le\bar\gamma<0.9$ of the tests calibrated in
+that class (nominal looks and Zwieback, which reject about 20% of the zones under $H_0$, are left
+out).
 
 Example:
     python experiments/figures/fig_pfa_power_cov.py --touching <run> --white <run> \
@@ -71,7 +73,7 @@ def main(args):
     a.set_title("(a) false alarms", loc="left", fontweight="bold")
     closures = sorted({float(r["closure_deg"]) for r in comp})
     power_cols = {"idx": np.arange(len(closures)), "closure": closures}
-    for m in ("scale_free", "scale_free_nb", "equal", "plugin"):
+    for m in ("scale_free", "scale_free_nb", "equal", "plugin", "yuan"):
         lab, col, mk, ls = TESTS[m]
         pts = [(mu, float(r["reject"])) for mu in closures for r in comp
                if r["method"] == m and r["class"] == args.power_class

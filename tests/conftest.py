@@ -1,4 +1,4 @@
-# Pytest configuration: backend parametrisation copied from HDR simulations_hdr (tests/conftest.py, a5d445d)
+# Pytest configuration: every backend test runs on each available backend
 # Author: Ammar Mian
 # Date: 21/10/2025
 

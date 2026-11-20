@@ -6,7 +6,8 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-_CSLC_RE = re.compile(r"OPERA_L2_CSLC-S1_(T\d{3}-\d{6}-IW\d)_(\d{8})T(\d{6})Z_\d{8}T\d{6}Z_(S1[ABC])_VV_v[\d.]+\.h5$")
+_CSLC_RE = re.compile(r"OPERA_L2_CSLC-S1_(T\d{3}-\d{6}-IW\d)_(\d{8})T(\d{6})Z_\d{8}T\d{6}Z_"
+                      r"(S1[ABC])_VV_v[\d.]+\.h5$")
 
 
 def list_bursts(cslc_dir: Path) -> dict[str, list[dict]]:
@@ -16,7 +17,8 @@ def list_bursts(cslc_dir: Path) -> dict[str, list[dict]]:
         m = _CSLC_RE.match(p.name)
         if m:
             burst, date, hms, platform = m.groups()
-            bursts.setdefault(burst, []).append({"date": date, "time": hms, "platform": platform, "path": p})
+            bursts.setdefault(burst, []).append({"date": date, "time": hms, "platform": platform,
+                                                 "path": p})
     for burst, acq in bursts.items():
         acq.sort(key=lambda a: (a["date"], a["time"]))
         dates = [a["date"] for a in acq]

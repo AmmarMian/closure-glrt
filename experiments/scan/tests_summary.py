@@ -1,5 +1,5 @@
 r"""Real-data comparison of the closure tests and intervals from a ``zone_scan.py --extra`` run
-(TGRS plan, E3).
+(Sec. VII-A).
 
 Per window, triplet and class of zone coherence (``gbar_own`` for the same-day triplets,
 ``gbar_indep`` otherwise, as in the paper): detected share at ``--pfa`` of the scale-free test

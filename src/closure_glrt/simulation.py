@@ -2,7 +2,8 @@ r"""Simulation of multilook cells of three acquisitions.
 
 Snapshot model of a cell of $r\times c$ pixels, pixel $n$:
 
-$$x_n=\sqrt{\tau_n}\,\boldsymbol L\,\boldsymbol s_n,\qquad \boldsymbol\Sigma=\boldsymbol L\boldsymbol L^{\mathsf H},$$
+$$x_n=\sqrt{\tau_n}\,\boldsymbol L\,\boldsymbol s_n,\qquad \boldsymbol\Sigma=\boldsymbol
+L\boldsymbol L^{\mathsf H},$$
 
 * $\boldsymbol s_n\in\mathbb C^3$: three independent unit-variance circular Gaussian fields
   (one per date), white or filtered by a 2-D kernel $k$ (spatial correlation of the looks,
@@ -11,7 +12,7 @@ $$x_n=\sqrt{\tau_n}\,\boldsymbol L\,\boldsymbol s_n,\qquad \boldsymbol\Sigma=\bo
   clutter; $\tau\equiv1$ is Gaussian speckle);
 * $\boldsymbol\Sigma$: coherence matrix of the cell; its closure is the true closure.
 
-Data are generated in numpy (complex128), as in HDR: the caller moves them to a backend with
+Data are generated in numpy (complex128): the caller moves them to a backend with
 :func:`closure_glrt.backend.get_data_on_device`, which gives complex64 on torch-mps; casting
 to complex64 elsewhere is done with :func:`closure_glrt.backend.to_dtype`.
 
@@ -35,7 +36,8 @@ __all__ = [
 
 def coherence_matrix(g12, g23, g13, closure=0.0):
     r"""Coherence matrices ``(..., 3, 3)`` with magnitudes $\gamma_{12},\gamma_{23},\gamma_{13}$
-    and closure $\Phi$ put on the phase of entry (1, 2): $\arg(\Sigma_{12}\Sigma_{23}\Sigma_{31})=\Phi$."""
+    and closure $\Phi$ put on the phase of entry (1, 2):
+    $\arg(\Sigma_{12}\Sigma_{23}\Sigma_{31})=\Phi$."""
     g12, g23, g13, closure = np.broadcast_arrays(*(np.asarray(x, dtype=np.float64)
                                                     for x in (g12, g23, g13, closure)))
     S = np.zeros(g12.shape + (3, 3), dtype=np.complex128)
@@ -123,7 +125,8 @@ def simulate_cells(Sigma, window, rng, kernel=None, texture=None):
 
 
 def _draw_texture(rng, texture, shape):
-    """Texture tau of ``shape``: ones, Gamma(nu, 1/nu) for a float nu, or ``texture(rng, shape)``."""
+    """Texture tau of ``shape``: ones, Gamma(nu, 1/nu) for a float nu, or
+    ``texture(rng, shape)``."""
     if texture is None:
         return np.ones(shape)
     if callable(texture):
@@ -146,7 +149,8 @@ def effective_looks(tau, rho=None):
 
 
 def kernel_from_spectrum(s, taps: int):
-    r"""Zero-phase complex kernel of $2\,$``taps``$+1$ samples with $|\mathrm{FFT}\,h|^2\propto s$, unit energy.
+    r"""Zero-phase complex kernel of $2\,$``taps``$+1$ samples with $|\mathrm{FFT}\,h|^2\propto s$,
+    unit energy.
 
     ``s`` is a 1-D power spectrum (``s_az`` or ``s_rg`` of the spectrum store); filtering white
     noise along one axis with $h$ gives speckle with that spectrum along this axis.
@@ -157,7 +161,8 @@ def kernel_from_spectrum(s, taps: int):
 
 
 def _separable_speckle(rng, n, shape, h_az, h_rg):
-    """(n, 3, H, W) unit-variance speckle filtered along rows (az) by h_az and columns (rg) by h_rg."""
+    """(n, 3, H, W) unit-variance speckle filtered along rows (az) by h_az and columns (rg) by
+    h_rg."""
     ka, kr = len(h_az), len(h_rg)
     H, W = shape
     g = (rng.standard_normal((n, 3, H + ka - 1, W + kr - 1))
@@ -188,7 +193,7 @@ def simulate_zones(R, window, zone, rng, h_az=None, h_rg=None, closure=0.0, text
     share correlated pixels as on the image; the looks of each cell are mixed over the dates by
     the Cholesky factor of its matrix. Returns ``(B, L, 3, 3)`` complex128 with the scan layout
     ``[..., t, k]`` $=[\hat\Sigma]_{t,t+k}$ (``nan`` where $t+k>2$), ready for
-    :func:`closure_glrt.closure.triplet_quantities`. Generated in numpy (HDR convention).
+    :func:`closure_glrt.closure.triplet_quantities`. Generated in numpy.
     """
     R = np.asarray(R, dtype=np.complex128).copy()
     B, L = R.shape[:2]

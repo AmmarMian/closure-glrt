@@ -31,7 +31,8 @@ def test_uavsar_scan_store(tmp_path):
     data.mkdir()
     stack = _fake_stack(data)
     runs = tmp_path / "runs"
-    cmd = [sys.executable, str(REPO / "experiments/stores/uavsar_scan.py"), "--stack-dir", str(data),
+    cmd = [sys.executable, str(REPO / "experiments/stores/uavsar_scan.py"),
+           "--stack-dir", str(data),
            "--strip-rows", "30", "--threads", "2", "--io-threads", "2", "--runs-root", str(runs),
            "--allow-dirty"]
     subprocess.run(cmd, check=True, capture_output=True)

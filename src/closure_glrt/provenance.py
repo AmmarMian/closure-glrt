@@ -63,7 +63,8 @@ def _git(*args: str) -> str:
 def git_state() -> dict:
     """Commit, branch and dirty flag of the repository holding this code."""
     status = _git("status", "--porcelain")
-    return {"commit": _git("rev-parse", "HEAD"), "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+    return {"commit": _git("rev-parse", "HEAD"),
+            "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
             "dirty": bool(status), "status": status.splitlines()}
 
 
@@ -109,7 +110,8 @@ def start_run(task: str, params: dict, project_root: Path, cold_root: Path,
     """Create the run directories, write the initial manifest and the ledger start line."""
     git = git_state()
     if git["dirty"] and not allow_dirty:
-        raise RuntimeError(f"git tree of {REPO} is dirty; commit first:\n" + "\n".join(git["status"]))
+        raise RuntimeError(f"git tree of {REPO} is dirty; commit first:\n"
+                           + "\n".join(git["status"]))
     run_id = f"{datetime.now(timezone.utc):%Y%m%dT%H%M}_{task}_{git['commit'][:7]}"
     project_root, cold_root = Path(project_root), Path(cold_root)
     run = Run(run_id, project_root / "runs" / run_id, cold_root / "runs" / run_id,

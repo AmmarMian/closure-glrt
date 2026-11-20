@@ -69,7 +69,8 @@ def main(args):
     store_path = run.large_dir / "scan.zarr"
     root = zarr.open_group(store_path, mode="w")
     root.attrs.update({
-        "acquisitions": [{"index": t, "flight": x.flight, "date": x.date} for t, x in enumerate(acq)],
+        "acquisitions": [{"index": t, "flight": x.flight, "date": x.date}
+                         for t, x in enumerate(acq)],
         "window": [r, c], "max_lag": K, "image_shape": [H, W], "segment": args.segment,
         "pols": args.pols, "run_id": run.run_id,
         "lags": "lags[i, j, t, k] = mean over cell (i, j) of x_t conj(x_{t+k}); nan if t + k >= T",

@@ -1,5 +1,5 @@
 r"""Whole-scene null field: detections, clusters and sign agreement under $H_0$ against real data
-(TGRS plan, E4).
+(check that the clusters and signs of real detections do not come from speckle).
 
 A strip of ``--zones-az`` zones in azimuth and the full width of the scan (triplet ``--triplet``,
 cells of the base size) is simulated under $H_0$: every cell keeps the three sample coherences of

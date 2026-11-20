@@ -3,7 +3,8 @@ r"""Split-zone check of the confidence arcs on real data (TGRS, real-data check 
 Each zone of $z_a\times z_b$ cells is cut into its two checkerboard halves (cells with $i+j$ even
 and odd). With the neighbor precisions of the zone
 (:func:`closure_glrt.closure.neighbor_concentration`, computed on the whole zone as in the
-paper), each half gives an estimate $\hat\mu_h$ of the closure and the half-width $\Delta_h$ of its $1-\alpha$ arc (:func:`confidence_halfwidth`). Both
+paper), each half gives an estimate $\hat\mu_h$ of the closure and the half-width $\Delta_h$ of its
+$1-\alpha$ arc (:func:`confidence_halfwidth`). Both
 halves estimate the closure of the same zone from disjoint cells, so that, if the arcs are right,
 $z=\operatorname{wrap}(\hat\mu_A-\hat\mu_B)/\sqrt{\sigma_A^2+\sigma_B^2}$, with
 $\sigma_h=\Delta_h/z_{1-\alpha/2}$, is close to standard normal. Reported per class of the zone

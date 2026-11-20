@@ -1,5 +1,5 @@
 r"""Coverage of the confidence arcs, bias of $\hat\mu$ and false-alarm rate, under $H_0$ and $H_1$,
-in UAVSAR conditions and outside the model (TGRS plan, E1 and E2).
+in UAVSAR conditions and outside the model (Sec. VI).
 
 Zones are simulated as in :mod:`pfa_power` (coherences of the real cells of triplet ``--triplet``,
 speckle filtered by the measured spectrum, one field per zone cut into touching cells), with one

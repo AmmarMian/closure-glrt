@@ -14,9 +14,7 @@ from closure_glrt.glrt import scale_ml
 
 __all__ = [
     "wrap",
-    "fit_von_mises_ml",
     "WrappedNormal",
-    "fit_wrapped_normal",
     "vm_cdf",
     "leave_one_out",
     "pit",
@@ -30,10 +28,6 @@ def wrap(x):
     return np.angle(np.exp(1j * np.asarray(x, dtype=np.float64)))
 
 
-def fit_von_mises_ml(phi):
-    r"""Maximum likelihood $(\hat\mu,\hat\kappa)$ of one von Mises law."""
-    kappa, mu, _ = stats.vonmises.fit(np.asarray(phi, dtype=np.float64).ravel(), fscale=1)
-    return float(mu), float(kappa)
 
 
 class WrappedNormal:
@@ -55,10 +49,6 @@ class WrappedNormal:
                 - stats.norm.cdf(-np.pi + shift, self.mu, self.sigma)).sum(-1)
 
 
-def fit_wrapped_normal(phi):
-    r"""Moment fit: $\hat\mu=\arg\bar z$, $\hat\sigma^2=-2\log|\bar z|$, $\bar z$ the mean of $e^{j\varphi}$."""
-    z = np.mean(np.exp(1j * np.asarray(phi, dtype=np.float64).ravel()))
-    return float(np.angle(z)), float(np.sqrt(-2 * np.log(np.abs(z))))
 
 
 def vm_cdf(d, kappa):
@@ -69,7 +59,8 @@ def vm_cdf(d, kappa):
 def leave_one_out(phi, weights, batch: int = 20_000):
     r"""Leave-one-out residual and scale of every cell of every zone.
 
-    For the cells $\ell=1..L$ of a zone (last axis), $\hat\mu_{-\ell}=\arg\sum_{m\ne\ell}w_me^{j\hat\Phi_m}$,
+    For the cells $\ell=1..L$ of a zone (last axis),
+    $\hat\mu_{-\ell}=\arg\sum_{m\ne\ell}w_me^{j\hat\Phi_m}$,
     $d_\ell=\operatorname{wrap}(\hat\Phi_\ell-\hat\mu_{-\ell})$, and $\hat c_{-\ell}$ is the maximum
     likelihood scale of the other cells around their own direction (root of
     $\sum_{m\ne\ell}w_mA(cw_m)=|\sum_{m\ne\ell}w_me^{j\hat\Phi_m}|$). Zones ``(Z, L)`` are processed
@@ -96,7 +87,8 @@ def leave_one_out(phi, weights, batch: int = 20_000):
 def pit(d, kappa, scale, law: str = "vm_c"):
     r"""PIT $u=F(d)$ of residuals ``d`` under one law of the closure noise.
 
-    ``"vm_c"``: $\mathcal{VM}(0,\hat c\kappa)$ (the model); ``"vm_1"``: $\mathcal{VM}(0,\kappa)$ (scale one);
+    ``"vm_c"``: $\mathcal{VM}(0,\hat c\kappa)$ (the model); ``"vm_1"``: $\mathcal{VM}(0,\kappa)$
+    (scale one);
     ``"wn_c"``: wrapped normal of variance $1/(\hat c\kappa)$.
     """
     d, kappa, scale = (np.asarray(x, dtype=np.float64) for x in (d, kappa, scale))
@@ -114,7 +106,8 @@ def pit(d, kappa, scale, law: str = "vm_c"):
 
 
 def leave_one_out_pit(phi, weights, law="vm_c"):
-    r"""PIT of each cell against the closure of the other cells of its zone (see :func:`leave_one_out`).
+    r"""PIT of each cell against the closure of the other cells of its zone (see
+    :func:`leave_one_out`).
 
     Under the model the $u_\ell$ are uniform on (0, 1), up to the small effect of estimating
     $\hat\mu_{-\ell}$ and $\hat c_{-\ell}$ (compare real data with a simulated baseline). Returns

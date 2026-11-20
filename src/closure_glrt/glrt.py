@@ -80,7 +80,9 @@ def _deficits(phi, w, backend_name):
 
 
 def _one_minus_A(x, backend_name):
-    r"""$1-I_1(x)/I_0(x)$; series $\frac1{2x}+\frac1{8x^2}+\frac1{8x^3}+\frac{25}{128x^4}+\frac{13}{32x^5}$ for large $x$."""
+    r"""$1-I_1(x)/I_0(x)$; series
+    $\frac1{2x}+\frac1{8x^2}+\frac1{8x^3}+\frac{25}{128x^4}+\frac{13}{32x^5}$ for large $x$.
+    """
     be = get_backend_module(backend_name)
     large = x > _X_ASYMPT
     one = be.ones_like(x)
@@ -136,7 +138,8 @@ def _gstar_from_deficit(D, w, backend_name, c=None):
 
 
 def scale_ml(X: Array, weights: Array, backend_name: Union[str, Backend] = "numpy") -> Array:
-    r"""Root $\hat c$ of $g'(\hat c)=\sum_\ell w_\ell A(\hat cw_\ell)=X$ (0 if $X\le0$, inf if $X\ge W$).
+    r"""Root $\hat c$ of $g'(\hat c)=\sum_\ell w_\ell A(\hat cw_\ell)=X$ (0 if $X\le0$, inf if
+    $X\ge W$).
 
     For $X$ close to $W$ prefer :func:`glrt` with ``details=True``, which forms $W-X$
     without cancellation.

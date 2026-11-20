@@ -2,7 +2,8 @@ r"""Coverage figure of the TGRS paper (two columns): coverage of the 95% arc (to
 estimate of the closure in percent of the closure (bottom) against the true closure, per class of
 zone coherence, for the arc with own and with neighbor precisions, and (when the runs have it) for
 the arc with neighbor precisions evaluated at each tested closure (method ``scale_free_nb_mu``,
-coverage only, since its estimate is that of ``scale_free_nb``). Later runs override earlier ones. The bias is shown at every
+coverage only, since its estimate is that of ``scale_free_nb``). Later runs override earlier ones.
+The bias is shown at every
 nonzero closure with its 2-sigma Monte Carlo error (rmse / sqrt(zones)).
 
 Input: run directories of ``experiments/detection/coverage.py`` (scenario touching). Output: a PDF.

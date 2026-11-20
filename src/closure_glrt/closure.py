@@ -96,7 +96,8 @@ def block_sample_covariance(stack: Array, window: tuple[int, int],
 
 def block_lag_covariance(stack: Array, window: tuple[int, int], max_lag: int = 2,
                          backend_name: Union[str, Backend] = "numpy", sum_dtype=None) -> Array:
-    r"""Entries $[\hat\Sigma_\ell]_{t,t+k}$, $k\le$ ``max_lag``, of every cell of a stack ``(H, W, T)``.
+    r"""Entries $[\hat\Sigma_\ell]_{t,t+k}$, $k\le$ ``max_lag``, of every cell of a stack ``(H, W,
+    T)``.
 
     Returns ``(H//r, W//c, T, max_lag+1)`` in the dtype of ``stack``; ``nan`` where
     $t+k\ge T$. Enough for every triplet of dates at most ``max_lag`` apart, at a memory cost
@@ -158,7 +159,8 @@ def aggregate_cells(lags: Array, factor: tuple[int, int],
     return x.sum(3).sum(1) / (a * b)
 
 
-def tile_zones(x: Array, zone: tuple[int, int], backend_name: Union[str, Backend] = "numpy") -> Array:
+def tile_zones(x: Array, zone: tuple[int, int],
+               backend_name: Union[str, Backend] = "numpy") -> Array:
     r"""Cell grid ``(I, J, ...)`` -> zones ``(I // za, J // zb, za * zb, ...)`` (borders dropped).
 
     Cells of a zone are in row-major order (rows = azimuth, columns = range).

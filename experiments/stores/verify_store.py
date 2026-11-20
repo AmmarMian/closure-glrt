@@ -7,7 +7,8 @@ shape and dtype. Two stores with equal hashes hold identical numbers. The hashes
 stores are in ``data/stores.json``; ``--check`` compares against them.
 
 Examples:
-    uv run python experiments/stores/verify_store.py runs/large/runs/<run>/scan.zarr --arrays VV/lags
+    uv run python experiments/stores/verify_store.py runs/large/runs/<run>/scan.zarr --arrays
+    VV/lags
     uv run python experiments/stores/verify_store.py <store> --check uavsar-scan-s1
 """
 

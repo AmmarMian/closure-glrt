@@ -51,7 +51,8 @@ def add_run_arguments(parser: argparse.ArgumentParser, task: str) -> None:
     parser.add_argument("--runs-root", type=Path, default=None,
                         help="Default: $RUNS_ROOT or <repo>/runs.")
     parser.add_argument("--allow-dirty", action="store_true",
-                        help="Run from a git tree with uncommitted changes (recorded in the manifest).")
+                        help="Run from a git tree with uncommitted changes "
+                             "(recorded in the manifest).")
     parser.add_argument("--debug", action="store_true")
 
 

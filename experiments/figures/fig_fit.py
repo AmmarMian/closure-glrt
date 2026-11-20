@@ -39,10 +39,6 @@ LAWS = {"vm_c": dict(color=BLUE, ls="-", lw=1.7, marker=None,
 FONT = 8
 
 
-def label_at(ax, x, y, text, color, dx=1.08, dy=1.0, ha="left", va="center", log=True):
-    """Text next to the point (x, y) of a curve, in data coordinates."""
-    ax.text(x * dx if log else x + dx, y * dy if log else y + dy, text, color=color,
-            fontsize=FONT - 0.5, ha=ha, va=va)
 
 
 def spread_panel(ax, prof, src, sim, win, t, min_kappa):

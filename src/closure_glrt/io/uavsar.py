@@ -80,7 +80,8 @@ class StripReader:
 
     def __init__(self, paths: list[Path], shape: tuple[int, int], strip_rows: int,
                  n_threads: int = 4):
-        self.paths, self.shape, self.strip_rows, self.n_threads = list(paths), shape, strip_rows, n_threads
+        self.paths, self.shape = list(paths), shape
+        self.strip_rows, self.n_threads = strip_rows, n_threads
         self.hashes: dict[str, str] = {}
 
     def __iter__(self):
@@ -139,7 +140,8 @@ def strip_statistics(X: np.ndarray, window: tuple[int, int], max_lag: int, n_thr
 
     def lag_block(j):
         a, b = bounds[j], bounds[j + 1]
-        # products in complex64, sums in complex128 (as for the stores of the paper), stored complex64
+        # products in complex64, sums in complex128 (as for the stores of the paper), stored
+        # complex64
         return block_lag_covariance(stack[:, a:b], window, max_lag,
                                     sum_dtype=np.complex128).astype(np.complex64)
 
@@ -153,4 +155,6 @@ def strip_statistics(X: np.ndarray, window: tuple[int, int], max_lag: int, n_thr
     with ThreadPoolExecutor(n_threads) as pool:
         lags = np.concatenate(list(pool.map(lag_block, range(n_threads))), axis=1)
         amps = list(pool.map(amp_block, range(n_threads)))
-    return lags, np.concatenate([a[0] for a in amps], axis=1), np.concatenate([a[1] for a in amps], axis=1)
+    amp_mean = np.concatenate([a[0] for a in amps], axis=1)
+    amp_disp = np.concatenate([a[1] for a in amps], axis=1)
+    return lags, amp_mean, amp_disp

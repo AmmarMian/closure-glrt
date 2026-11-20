@@ -1,8 +1,10 @@
 r"""Regenerate the figures of a paper from its registry (``figures/figures.toml`` of the paper).
 
 For each figure of the registry, run its script (in this folder) with its arguments, the PDF
-output (``--out <paper>/figures/pdf/<name>.pdf`` unless ``pdf_args`` is given) and the data of
-the pgfplots version (``--data <paper>/figures/data/<name>``). A figure whose inputs are missing
+output (``--out <paper>/figures/pdf/<name>.pdf`` unless ``pdf_args`` is given; ``{pdf}`` and
+``{figures}`` in ``pdf_args`` are the ``pdf/`` folder and the figures folder) and the data of
+the pgfplots version (``--data <paper>/figures/data/<name>``, unless ``data = false``). A figure
+whose inputs are missing
 on this machine (e.g. ``host = "server"`` inputs) is skipped and reported; run the same command
 on the host that has them, with ``--out-dir``, and copy the outputs back.
 
@@ -64,10 +66,13 @@ def command(fig, roots, paper, out_dir):
     data = out_dir / "data" / fig["name"]
     args = [resolve(a, roots, paper) for a in fig.get("args", [])]
     if "pdf_args" in fig:
-        outs = [a.replace("{pdf}", str(pdf)) for a in fig["pdf_args"]]
+        outs = [a.replace("{pdf}", str(pdf)).replace("{figures}", str(out_dir))
+                for a in fig["pdf_args"]]
     else:
         outs = ["--out", str(pdf / f"{fig['name']}.pdf")]
-    return [sys.executable, fig["script"], *args, *outs, "--data", str(data)], args
+    if fig.get("data", True):
+        outs += ["--data", str(data)]
+    return [sys.executable, fig["script"], *args, *outs], args
 
 
 def table(figs, path):
