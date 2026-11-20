@@ -22,19 +22,23 @@ paper.
 
 ## Installation
 
-Python 3.12 or later, [uv](https://docs.astral.sh/uv/) and (optionally)
-[just](https://github.com/casey/just).
+Python 3.12 or later, [uv](https://docs.astral.sh/uv/) and [just](https://github.com/casey/just)
+(the command runner of the recipes below; optional, each recipe is a plain `uv run` command).
 
 ```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh     # uv (or: brew install uv)
+uv tool install rust-just                           # just, from PyPI (or: brew install just,
+                                                    # cargo install just, apt install just)
 git clone https://github.com/AmmarMian/closure-glrt.git && cd closure-glrt
-uv sync                     # numpy, scipy, torch, zarr (Linux: torch 2.14.1 for CUDA 12.6)
-uv sync --extra io          # + h5py: OPERA CSLC reader (Sentinel-1)
-uv sync --extra geo         # + rasterio, pyproj: ancillary data, crop maps, map projections
-uv sync --group figures     # + matplotlib: figure scripts
-uv sync --extra cupy        # optional: CuPy (CUDA)
-uv sync --extra jax         # optional: JAX
+uv sync --extra io --extra geo --group figures      # everything the paper needs
 just test                   # every test on every available backend (GPU ones are skipped without a GPU)
 ```
+
+`uv sync` alone installs the library (numpy, scipy, torch, zarr; on Linux torch 2.14.1 for
+CUDA 12.6). The extras add the Sentinel-1 reader (`io`: h5py), the geographic tools of the
+ancillary data and maps (`geo`: rasterio, pyproj) and the figure scripts (`figures` group:
+matplotlib); `--extra cupy` and `--extra jax` add those backends. `uv sync` installs exactly the
+options it is given, so list them all in one call; the `just` recipes ask for what they need.
 
 The tests (`tests/`, run by the CI on every push with `ruff`) check the statistics (GLRT equal
 to the profile likelihood, false-alarm rate and arc coverage by Monte Carlo, De Zan's variance,
