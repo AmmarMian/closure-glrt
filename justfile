@@ -21,6 +21,11 @@ download what="uavsar" part="all":
 download-ancillary *what="all":
     uv run --extra geo python experiments/ancillary/fetch_ancillary.py {{what}}
 
+# Stage 1 shortcut: the paper's UAVSAR stores from Zenodo (37 GB; part: s1 | s2 | all), into
+# $RUNS_ROOT/large/runs, hash-checked; replaces the raw download and `store-uavsar`
+fetch-stores part="all":
+    scripts/download.sh stores {{part}}
+
 # Stage 1: UAVSAR scan of one segment (VV), ~1 h per segment on 12 threads
 store-uavsar segment="1":
     uv run python experiments/stores/uavsar_scan.py --segment {{segment}}

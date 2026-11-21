@@ -31,7 +31,11 @@
    }
   },
   "vv_rebuild_run": "20261120T1920_uavsar-scan-s1_8520f87",
-  "vv_rebuild_note": "rebuilt VV only with experiments/stores/uavsar_scan.py at commit 8520f87 (58 min, 24 threads, on the machine holding the SLCs); content hashes identical to the source run"
+  "vv_rebuild_note": "rebuilt VV only with experiments/stores/uavsar_scan.py at commit 8520f87 (58 min, 24 threads, on the machine holding the SLCs); content hashes identical to the source run",
+  "zenodo": {
+   "doi": "10.5281/zenodo.24414662",
+   "file": "20261120T1920_uavsar-scan-s1_8520f87.tar"
+  }
  },
  "uavsar-scan-s2": {
   "source_run": "20261027T0843_scan-sdelta-s2_724e285",
@@ -65,6 +69,10 @@
    }
   },
   "vv_rebuild_run": "20261120T2022_uavsar-scan-s2_8520f87",
-  "vv_rebuild_note": "rebuilt VV only with experiments/stores/uavsar_scan.py at commit 8520f87 (70 min, 24 threads, on the machine holding the SLCs); content hashes identical to the source run"
+  "vv_rebuild_note": "rebuilt VV only with experiments/stores/uavsar_scan.py at commit 8520f87 (70 min, 24 threads, on the machine holding the SLCs); content hashes identical to the source run",
+  "zenodo": {
+   "doi": "10.5281/zenodo.24414662",
+   "file": "20261120T2022_uavsar-scan-s2_8520f87.tar"
+  }
  }
 }

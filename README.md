@@ -1,5 +1,8 @@
 # closure-glrt
 
+[![tests](https://github.com/AmmarMian/closure-glrt/actions/workflows/tests.yml/badge.svg)](https://github.com/AmmarMian/closure-glrt/actions/workflows/tests.yml)
+[![data DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24414662.svg)](https://doi.org/10.5281/zenodo.24414662)
+
 Code for the paper *Confidence Intervals on the InSAR Closure Phase Without the Number of
 Looks* (R. Dussaud, A. Mian, N. Le Bihan). MIT license.
 
@@ -19,6 +22,7 @@ paper.
 - [Reproducing the results](#reproducing-the-results)
 - [Figures of the paper](#figures-of-the-paper)
 - [Data](#data)
+- [Citation](#citation)
 
 ## Installation
 
@@ -82,6 +86,11 @@ simulations of the paper run on GPU this way, the real-data scans on CPU.
 > 4.5 GB (3.9 GB of Landsat); every run directory of the paper 5.3 GB. The simulations of
 > Sec. VI only need the UAVSAR s1 store and the speckle spectrum; most figures can be redrawn
 > from the archived run directories alone (`just figure <name>`).
+>
+> **Shortcut:** the two UAVSAR stores are archived on Zenodo
+> ([doi:10.5281/zenodo.24414662](https://doi.org/10.5281/zenodo.24414662), 37 GB).
+> `just fetch-stores` downloads them into `$RUNS_ROOT/large/runs` and checks them; every
+> recipe then finds them as the latest `uavsar-scan-s<seg>` run, without the 2.2 TB of SLCs.
 
 Every result is computed from intermediate *stores* built once from the raw data. Each script
 writes a run directory `$RUNS_ROOT/runs/<UTC time>_<task>_<commit>` with a manifest (git commit,
@@ -96,7 +105,7 @@ hash in the run id, to `public_short`).
 | stage | command | output |
 |---|---|---|
 | 0. raw data | `just download uavsar s1` (and `s2`), `just download opera`, `just download-ancillary` | `$DATA_ROOT` (layout below) |
-| 1a. UAVSAR scan | `just store-uavsar 1`, `just store-uavsar 2` | `scan.zarr`: lags 0--2 of every 15 x 5 cell, VV |
+| 1a. UAVSAR scan | `just store-uavsar 1`, `just store-uavsar 2`, or `just fetch-stores` (Zenodo) | `scan.zarr`: lags 0--2 of every 15 x 5 cell, VV |
 | 1b. speckle spectrum | `just store-spectrum`, `just store-spectrum-cslc` | `spectrum.npz`: correlation of the SLC pixels |
 | 1c. Sentinel-1 | `just store-cslc`, `just store-cslc-triplets 1` (and `2`) | covariances of the matched triplets (`data/s1_triplets.csv`, `data/segments.json`) |
 | 2. experiments | `uv run python experiments/<folder>/<script>.py ...` (usage at the top of each script) | run directories |
@@ -165,7 +174,8 @@ Figs. 1 and 2 give data files byte-identical to those of the paper.
 
 ## Data
 
-All data are public. `scripts/download.sh` downloads them from the URL lists in `data/urls/`
+All data are public. The UAVSAR stores of stage 1a are on Zenodo (next subsection); the raw
+data come from their providers. `scripts/download.sh` downloads them from the URL lists in `data/urls/`
 into `data/raw/` (or `$DATA_ROOT`). The experiments expect this layout:
 
 ```
@@ -178,6 +188,29 @@ $DATA_ROOT/
 └── sentinel1/OPERA_CSLC/
     ├── T035/  T042/  T115/        # OPERA_L2_CSLC-S1_<burst>_<time>_..._VV_v1.1.h5
 ```
+
+### Stores of the paper (Zenodo)
+
+[doi:10.5281/zenodo.24414662](https://doi.org/10.5281/zenodo.24414662) (CC BY 4.0) holds the
+VV scan stores of both segments, one tar per run directory of `$RUNS_ROOT/large/runs`:
+
+| file | size | content |
+|---|---|---|
+| `20261120T1920_uavsar-scan-s1_8520f87.tar` | 18 GB | `scan.zarr` of segment s1: `VV/lags` (4444 x 1980 cells, 68 dates, lags 0--2), `VV/amp_mean`, `VV/amp_disp` |
+| `20261120T2022_uavsar-scan-s2_8520f87.tar` | 19 GB | the same for segment s2 (4706 x 1980 cells) |
+| `stores.json`, `SHA256SUMS` | | content hashes of the arrays (this repository's `data/stores.json`), tar checksums |
+
+`just fetch-stores` (or `scripts/download.sh stores s1`) downloads, checks the tar SHA-256,
+extracts and runs `verify_store.py --check`. By hand:
+
+```sh
+cd $RUNS_ROOT/large/runs
+curl -LO https://zenodo.org/records/24414662/files/20261120T1920_uavsar-scan-s1_8520f87.tar
+tar -xf 20261120T1920_uavsar-scan-s1_8520f87.tar
+```
+
+These are the stores rebuilt VV-only at commit `8520f87` (published `public_short` in
+`data/commit_map.csv`); their content hashes equal those of the stores used in the paper.
 
 ### UAVSAR (main data set)
 
@@ -227,3 +260,26 @@ $DATA_ROOT/
 Every file is recorded in `manifest.jsonl` (URL, SHA-256, retrieval time). A re-download gives
 the same rasters as ours (checked on the CDL: identical pixels and grid) but not always the same
 file hashes (GDAL version); the Open-Meteo and NCEI records can be revised by their providers.
+
+## Citation
+
+The paper (under review) and the data:
+
+```bibtex
+@misc{dussaud2026closure,
+  author = {Dussaud, Robin and Mian, Ammar and Le Bihan, Nicolas},
+  title  = {Confidence Intervals on the {InSAR} Closure Phase Without the Number of Looks},
+  year   = {2026},
+  note   = {Code: \url{https://github.com/AmmarMian/closure-glrt}}
+}
+
+@dataset{dussaud2026stores,
+  author    = {Dussaud, Robin and Mian, Ammar and Le Bihan, Nicolas},
+  title     = {{UAVSAR} {SDelta\_23518} {VV} cell covariance stores for: Confidence Intervals on
+               the {InSAR} Closure Phase Without the Number of Looks},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.24414662},
+  url       = {https://doi.org/10.5281/zenodo.24414662}
+}
+```
