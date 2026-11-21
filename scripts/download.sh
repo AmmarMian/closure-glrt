@@ -8,8 +8,9 @@
 # Resumable: complete files are skipped, partial ones resumed. Sizes: one UAVSAR 1x1 SLC is
 # 5.3 GB; segment s1 (204 SLCs, 3 pols x 68 acquisitions) is about 1.1 TB, s2 the same.
 # `stores` skips stage 1a: it fetches the VV scan stores of both segments (18 + 19 GB tars,
-# doi:10.5281/zenodo.24414662) into $RUNS_ROOT/large/runs, checks the tar SHA-256 and then the
-# content hashes of data/stores.json. Extraction needs the tar size again in free space.
+# doi:10.5281/zenodo.24414662) into $RUNS_ROOT/large/runs (manifests in $RUNS_ROOT/runs), checks
+# the tar SHA-256, then the content hashes of data/stores.json. Extracting needs the tar size
+# again in free space.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 root="${DATA_ROOT:-$here/data/raw}"
@@ -45,7 +46,8 @@ case "${1:-}" in
     done ;;
   stores)
     rec="https://zenodo.org/records/24414662/files"
-    dest="${RUNS_ROOT:-$here/runs}/large/runs"; mkdir -p "$dest"
+    dest="${RUNS_ROOT:-$here/runs}/large/runs"; small="${RUNS_ROOT:-$here/runs}/runs"
+    mkdir -p "$dest"
     case "${2:-all}" in
       s1) segs=(1) ;; s2) segs=(2) ;; all) segs=(1 2) ;;
       *) echo "unknown segment ${2}" >&2; exit 1 ;;
@@ -59,7 +61,12 @@ case "${1:-}" in
         echo "downloading $run.tar"
         (cd "$dest" && curl -fL --retry 5 -C - -o "$run.tar" "$rec/$run.tar?download=1")
         (cd "$dest" && grep " $run.tar\$" SHA256SUMS.zenodo | "${sha[@]}" -c -)
-        tar -xf "$dest/$run.tar" -C "$dest" && rm "$dest/$run.tar"
+        # the tar holds the run directory twice: the store (large/runs) and, read-only, the
+        # manifest and log (small outputs, runs/)
+        tar -xf "$dest/$run.tar" -C "$dest" --exclude "$run/manifest.json" --exclude "$run/log.txt"
+        mkdir -p "$small"
+        tar -xf "$dest/$run.tar" -C "$small" "$run/manifest.json" "$run/log.txt"
+        rm "$dest/$run.tar"
       fi
       (cd "$here" && uv run python experiments/stores/verify_store.py "$dest/$run/scan.zarr" \
         --check "uavsar-scan-s$s")

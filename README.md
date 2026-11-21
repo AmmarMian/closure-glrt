@@ -170,7 +170,11 @@ need the full stores; the archived runs in the paper directory suffice for Figs.
 
 **Checked.** On the compute server, from a fresh `uv sync`, `just fig-fit`, `fig-simu-thumbs`,
 `fig-series` (zone scan, weather and land-cover runs included), and the context and plots of
-Figs. 1 and 2 give data files byte-identical to those of the paper.
+Figs. 1 and 2 give data files byte-identical to those of the paper. With the VV-only stores of
+Zenodo, every `run-*` recipe that reads them (zone scans and cross-sensor runs of both segments,
+fit, context, coverage simulations) reproduces the outputs of the paper's runs: identical files,
+or, where the code has gained columns or methods since, identical values on every row of the
+paper's run; the plots of Figs. 2, 4, 7, 8 and 9 from these runs give byte-identical data.
 
 ## Data
 

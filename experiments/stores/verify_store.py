@@ -55,6 +55,8 @@ def main(args):
             print(f"MISMATCH {n}", file=sys.stderr)
         for n in missing:
             print(f"not hashed: {n} (pass it with --arrays)", file=sys.stderr)
+        if not bad and not missing:
+            print(f"OK: content hashes equal to data/stores.json[{args.check!r}]", file=sys.stderr)
         sys.exit(1 if bad else 0)
 
 
