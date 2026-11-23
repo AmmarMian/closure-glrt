@@ -30,11 +30,13 @@ from matplotlib.patches import Patch
 from pgfdata import write_dat, write_macros
 from style import COLUMN, GRID, INK, MUTED, PAGE, S1, UAVSAR, style
 
-NEG, MID, POS = "#c0392b", "#f4f3ee", "#1f5fae"
-UNDETECTED = "#b9b8b2"                         # zone tested, no closure detected
-SWATH = "#f1f0eb"                              # inside the UAVSAR swath, not a common zone
+# Lightness decreases monotonically from NEG to POS, so that the sign stays readable in grayscale;
+# both gray tones are lighter than every closure color.
+NEG, MID, POS = "#eba53c", "#827d87", "#00286e"
+UNDETECTED = "#d6d6d6"                         # zone tested, no closure detected
+SWATH = "#f4f4f4"                              # inside the UAVSAR swath, not a common zone
 AZ_M, RG_M = 0.6, 1.6655                       # UAVSAR SLC pixel spacing (azimuth, slant range)
-CMAP = LinearSegmentedColormap.from_list("closure", [NEG, "#ef9a8a", MID, "#8db7e6", POS])
+CMAP = LinearSegmentedColormap.from_list("closure", [NEG, MID, POS])
 SENSORS = (("uavsar", "UAVSAR (L)"), ("s1", "Sentinel-1 (C)"))
 
 
